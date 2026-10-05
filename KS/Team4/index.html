@@ -1,242 +1,423 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
- <meta charset="UTF-8">
- <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <title>Gravity Physics Baseline - Milky Way Edition</title>
- <style>
- * {
- box-sizing: border-box;
- user-select: none;
- margin: 0;
- padding: 0;
- font-family: 'Courier New', Courier, monospace, sans-serif;
- }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gravity Physics Simulation - Galactic Edition</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      margin: 0;
+      padding: 0;
+      font-family: 'Courier New', Courier, monospace, sans-serif;
+    }
 
- body {
- background-color: #020208;
- color: #ffffff;
- display: flex;
- flex-direction: column;
- align-items: center;
- justify-content: flex-start;
- height: 100vh;
- overflow: hidden;
- padding: 16px;
- }
+    body {
+      background-color: #020208;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      height: 100vh;
+      overflow: hidden;
+      padding: 16px;
+    }
 
- /* Top Header Bar */
- #header {
- display: flex;
- justify-content: space-between;
- align-items: center;
- width: 100%;
- max-width: 1100px;
- margin-bottom: 12px;
- padding-bottom: 8px;
- border-bottom: 1px solid rgba(255, 255, 255, 0.4);
- }
+    /* Top Header Bar */
+    #header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      max-width: 1100px;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+      z-index: 10;
+    }
 
- h1 {
- font-size: 18px;
- letter-spacing: 2px;
- text-transform: uppercase;
- font-weight: bold;
- text-shadow: 0 0 10px rgba(180, 200, 255, 0.5);
- }
+    h1 {
+      font-size: 18px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-weight: bold;
+      text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+    }
 
- .btn-reset {
- background: transparent;
- color: #ffffff;
- border: 1px solid #ffffff;
- padding: 6px 16px;
- font-size: 14px;
- font-weight: bold;
- cursor: pointer;
- text-transform: uppercase;
- letter-spacing: 1px;
- transition: all 0.15s ease-in-out;
- }
+    .btn-reset {
+      background: rgba(0, 0, 0, 0.6);
+      color: #ffffff;
+      border: 1px solid #ffffff;
+      padding: 6px 16px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: all 0.15s ease-in-out;
+      border-radius: 4px;
+    }
 
- .btn-reset:hover {
- background: #ffffff;
- color: #000000;
- box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
- }
+    .btn-reset:hover {
+      background: #ffffff;
+      color: #000000;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+    }
 
- /* Main Canvas Container */
- #canvas-wrapper {
- position: relative;
- width: 100%;
- max-width: 1100px;
- flex-grow: 1;
- display: flex;
- justify-content: center;
- align-items: center;
- }
+    /* Main Canvas Container */
+    #canvas-wrapper {
+      position: relative;
+      width: 100%;
+      max-width: 1100px;
+      flex-grow: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      touch-action: none; /* Prevents Chromebook touchscreen gestures from scrolling */
+    }
 
- canvas {
- background-color: #020208;
- border: 1px solid rgba(255, 255, 255, 0.3);
- border-radius: 4px;
- display: block;
- cursor: crosshair;
- width: 100%;
- height: 100%;
- touch-action: none;
- }
+    canvas {
+      background-color: #000000;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      display: block;
+      cursor: crosshair;
+      width: 100%;
+      height: 100%;
+      border-radius: 6px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+    }
 
- .instructions {
- margin-top: 8px;
- font-size: 11px;
- color: #aaaabb;
- text-align: center;
- }
- </style>
+    .instructions {
+      margin-top: 8px;
+      font-size: 11px;
+      color: #aaaaaa;
+      text-align: center;
+      z-index: 10;
+    }
+  </style>
 </head>
 <body>
 
- <!-- Header Section -->
- <div id="header">
- <h1>Gravity Simulation</h1>
- <button class="btn-reset" onclick="resetSimulation()">Reset</button>
- </div>
+  <!-- Header Section -->
+  <div id="header">
+    <h1>Gravity Simulation</h1>
+    <button class="btn-reset" onclick="resetSimulation()">Reset</button>
+  </div>
 
- <!-- Canvas Container -->
- <div id="canvas-wrapper">
- <canvas id="simCanvas"></canvas>
- </div>
+  <!-- Canvas Container -->
+  <div id="canvas-wrapper">
+    <canvas id="simCanvas"></canvas>
+  </div>
 
- <div class="instructions">
- Tap or click anywhere on the canvas to launch a ball into orbit.
- </div>
+  <div class="instructions">
+    Tap or click anywhere on the canvas to launch a space probe.
+  </div>
 
- <script>
- const canvas = document.getElementById('simCanvas');
- const ctx = canvas.getContext('2d');
+  <script>
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
 
- // Off-screen canvas for pre-rendering the Milky Way background (Optimized for Chromebook performance)
- const bgCanvas = document.createElement('canvas');
- const bgCtx = bgCanvas.getContext('2d');
+    // Offscreen background canvas to pre-render the galaxy once for smooth Chromebook performance
+    const bgCanvas = document.createElement('canvas');
+    const bgCtx = bgCanvas.getContext('2d');
 
- // SIMULATION CONSTANTS
- const GRAVITY_CONSTANT = 1800; // Strength of gravitational pull (G)
- const LAUNCH_VELOCITY = 5; // Fixed velocity on click
- const FIXED_LAUNCH_ANGLE = 90; // Fixed direction in degrees (90° = straight right)
- const TRAIL_LENGTH = 300; // Number of historic trail points stored
- const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
+    // SIMULATION CONSTANTS
+    const GRAVITY_CONSTANT = 1800; // Strength of gravitational pull (G)
+    const LAUNCH_VELOCITY = 5; // Fixed velocity on click
+    const FIXED_LAUNCH_ANGLE = 90; // Fixed direction in degrees (90° = straight right)
+    const TRAIL_LENGTH = 300; // Number of historic trail points stored
+    const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
 
- // STATE VARIABLES
- let balls = [];
+    // STATE VARIABLES
+    let balls = [];
 
- // Central Gravity Node Definition
- const centralNode = {
- x: 0,
- y: 0,
- radius: 12
- };
+    // Central Gravity Node Definition
+    const centralNode = {
+      x: 0,
+      y: 0,
+      radius: 12
+    };
 
- function generateMilkyWay() {
- bgCanvas.width = canvas.width;
- bgCanvas.height = canvas.height;
+    // Procedural Milky Way Galaxy Generator
+    function renderGalacticBackground() {
+      bgCanvas.width = canvas.width;
+      bgCanvas.height = canvas.height;
 
- // Deep space gradient background
- const baseGrad = bgCtx.createRadialGradient(
- bgCanvas.width / 2, bgCanvas.height / 2, 50,
- bgCanvas.width / 2, bgCanvas.height / 2, Math.max(bgCanvas.width, bgCanvas.height)
- );
- baseGrad.addColorStop(0, '#0a0818');
- baseGrad.addColorStop(0.5, '#04030a');
- baseGrad.addColorStop(1, '#010103');
- bgCtx.fillStyle = baseGrad;
- bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+      const w = bgCanvas.width;
+      const h = bgCanvas.height;
 
- // Outer Galactic Core Nebula Glow
- bgCtx.save();
- bgCtx.translate(bgCanvas.width / 2, bgCanvas.height / 2);
- bgCtx.rotate(-Math.PI / 6); // 30-degree galactic disk tilt
+      // Deep space baseline
+      bgCtx.fillStyle = '#03030c';
+      bgCtx.fillRect(0, 0, w, h);
 
- const bandLength = Math.max(bgCanvas.width, bgCanvas.height) * 1.5;
- const coreGlow = bgCtx.createRadialGradient(0, 0, 10, 0, 0, bandLength / 2);
- coreGlow.addColorStop(0, 'rgba(255, 235, 210, 0.35)');
- coreGlow.addColorStop(0.15, 'rgba(210, 140, 240, 0.22)');
- coreGlow.addColorStop(0.35, 'rgba(80, 100, 220, 0.15)');
- coreGlow.addColorStop(0.65, 'rgba(20, 30, 80, 0.06)');
- coreGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      // Faint background starfield across entire view
+      const numDistStars = Math.floor((w * h) / 1200);
+      for (let i = 0; i < numDistStars; i++) {
+        const sx = Math.random() * w;
+        const sy = Math.random() * h;
+        const size = Math.random() * 1.2;
+        const alpha = Math.random() * 0.7 + 0.2;
+        bgCtx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        bgCtx.fillRect(sx, sy, size, size);
+      }
 
- bgCtx.fillStyle = coreGlow;
- bgCtx.scale(2.2, 0.55); // Flatten radial glow into an elliptical galaxy disk
- bgCtx.beginPath();
- bgCtx.arc(0, 0, bandLength / 2, 0, Math.PI * 2);
- bgCtx.fill();
- bgCtx.restore();
+      // Milky Way Galactic Band (Angled diagonally)
+      bgCtx.save();
+      bgCtx.translate(w / 2, h / 2);
+      bgCtx.rotate(-Math.PI / 6); // -30 degree angle
 
- // Dense Star Dust along the Galactic Plane
- bgCtx.save();
- bgCtx.translate(bgCanvas.width / 2, bgCanvas.height / 2);
- bgCtx.rotate(-Math.PI / 6);
+      const bandWidth = Math.max(w, h) * 1.5;
+      const bandHeight = Math.min(w, h) * 0.55;
 
- const numDustStars = 450;
- for (let i = 0; i < numDustStars; i++) {
- const distAlongPlane = (Math.random() - 0.5) * bandLength;
- // Gaussian concentration towards center line
- const distFromPlane = (Math.random() + Math.random() - 1) * (bgCanvas.height * 0.18);
- const starSize = Math.random() * 1.4 + 0.3;
- const alpha = Math.random() * 0.75 + 0.2;
+      // Cosmic dust & nebula glowing layers
+      const drawNebulaGlow = (offX, offY, rX, rY, colorStops) => {
+        bgCtx.save();
+        bgCtx.translate(offX, offY);
+        bgCtx.scale(1, rY / rX);
+        const grad = bgCtx.createRadialGradient(0, 0, 0, 0, 0, rX);
+        colorStops.forEach(cs => grad.addColorStop(cs.stop, cs.color));
+        bgCtx.fillStyle = grad;
+        bgCtx.beginPath();
+        bgCtx.arc(0, 0, rX, 0, Math.PI * 2);
+        bgCtx.fill();
+        bgCtx.restore();
+      };
 
- bgCtx.fillStyle = `rgba(225, 235, 255, ${alpha})`;
- bgCtx.beginPath();
- bgCtx.arc(distAlongPlane, distFromPlane, starSize, 0, Math.PI * 2);
- bgCtx.fill();
- }
- bgCtx.restore();
+      // Outer galactic halo / cosmic clouds
+      drawNebulaGlow(0, 0, bandWidth * 0.5, bandHeight * 0.8, [
+        { stop: 0, color: 'rgba(140, 110, 190, 0.28)' },
+        { stop: 0.4, color: 'rgba(70, 50, 130, 0.18)' },
+        { stop: 0.7, color: 'rgba(20, 30, 80, 0.08)' },
+        { stop: 1, color: 'rgba(0, 0, 0, 0)' }
+      ]);
 
- // Scattered Field Stars across the full canvas
- const numFieldStars = 220;
- const starColors = ['#ffffff', '#dbe6ff', '#ffe8d6', '#cce0ff'];
- for (let i = 0; i < numFieldStars; i++) {
- const x = Math.random() * bgCanvas.width;
- const y = Math.random() * bgCanvas.height;
- const size = Math.random() * 1.2 + 0.2;
- const alpha = Math.random() * 0.8 + 0.2;
+      // Bright galactic core bloom
+      drawNebulaGlow(0, 0, bandWidth * 0.2, bandHeight * 0.4, [
+        { stop: 0, color: 'rgba(255, 240, 210, 0.45)' },
+        { stop: 0.3, color: 'rgba(230, 170, 210, 0.25)' },
+        { stop: 0.6, color: 'rgba(120, 80, 180, 0.12)' },
+        { stop: 1, color: 'rgba(0, 0, 0, 0)' }
+      ]);
 
- bgCtx.fillStyle = starColors[Math.floor(Math.random() * starColors.length)];
- bgCtx.globalAlpha = alpha;
- bgCtx.beginPath();
- bgCtx.arc(x, y, size, 0, Math.PI * 2);
- bgCtx.fill();
- }
- bgCtx.globalAlpha = 1.0;
- }
+      // Dense star cluster concentrated along galactic plane
+      const numMilkyStars = Math.floor((w * h) / 400);
+      for (let i = 0; i < numMilkyStars; i++) {
+        const u1 = Math.random();
+        const u2 = Math.random();
+        const randStdNorm = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+        
+        const sx = (Math.random() - 0.5) * bandWidth;
+        const sy = randStdNorm * (bandHeight * 0.22);
 
- function resizeCanvas() {
- const wrapper = document.getElementById('canvas-wrapper');
- canvas.width = wrapper.clientWidth;
- canvas.height = wrapper.clientHeight;
- 
- // Recenter gravity node dynamically
- centralNode.x = canvas.width / 2;
- centralNode.y = canvas.height / 2;
+        if (Math.abs(sx) < bandWidth / 2 && Math.abs(sy) < bandHeight / 2) {
+          const size = Math.random() < 0.95 ? Math.random() * 1.5 + 0.5 : Math.random() * 2.2 + 1;
+          const bright = Math.random();
+          let starColor;
 
- // Re-render galaxy background texture for new dimensions
- generateMilkyWay();
- }
+          if (bright > 0.85) starColor = `rgba(255, 230, 190, ${Math.random() * 0.8 + 0.2})`;
+          else if (bright > 0.6) starColor = `rgba(190, 220, 255, ${Math.random() * 0.8 + 0.2})`;
+          else starColor = `rgba(255, 255, 255, ${Math.random() * 0.6 + 0.2})`;
 
- window.addEventListener('resize', resizeCanvas);
- resizeCanvas();
+          bgCtx.fillStyle = starColor;
+          bgCtx.beginPath();
+          bgCtx.arc(sx, sy, size / 2, 0, Math.PI * 2);
+          bgCtx.fill();
+        }
+      }
 
- // Event Handlers for Mouse and Chromebook Touch Screens
- function handleInput(clientX, clientY) {
- const rect = canvas.getBoundingClientRect();
- const clickX = clientX - rect.left;
- const clickY = clientY - rect.top;
- launchBall(clickX, clickY);
- }
+      // Faint dark dust lanes slicing across the galactic center
+      for (let d = -3; d <= 3; d++) {
+        const dustX = d * 120 + (Math.random() * 40 - 20);
+        const dustY = (Math.random() - 0.5) * 30;
+        drawNebulaGlow(dustX, dustY, 90, 30, [
+          { stop: 0, color: 'rgba(5, 5, 12, 0.55)' },
+          { stop: 0.6, color: 'rgba(10, 8, 20, 0.3)' },
+          { stop: 1, color: 'rgba(0, 0, 0, 0)' }
+        ]);
+      }
 
- canvas.addEventListener('click', (e) => {
- handleInput(e.clientX, e.clientY);
- });
+      bgCtx.restore();
+    }
 
- canvas.addEventListener('touchstart', (e) => {
- e.preventDefault();
- if (
+    function resizeCanvas() {
+      const wrapper = document.getElementById('canvas-wrapper');
+      canvas.width = wrapper.clientWidth;
+      canvas.height = wrapper.clientHeight;
+
+      // Recenter gravity node dynamically
+      centralNode.x = canvas.width / 2;
+      centralNode.y = canvas.height / 2;
+
+      // Re-render pre-computed galaxy background
+      renderGalacticBackground();
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+
+    // Unified Touch and Click Event Handler for Chromebooks
+    function handlePointerLaunch(e) {
+      e.preventDefault(); // Prevents touch drag behavior on touchscreens
+      const rect = canvas.getBoundingClientRect();
+      let clientX, clientY;
+
+      if (e.touches && e.touches.length > 0) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+
+      const launchX = clientX - rect.left;
+      const launchY = clientY - rect.top;
+
+      launchBall(launchX, launchY);
+    }
+
+    canvas.addEventListener('click', handlePointerLaunch);
+    canvas.addEventListener('touchstart', handlePointerLaunch, { passive: false });
+
+    function launchBall(x, y) {
+      // Fixed launch direction: 90° (0° = UP, 90° = RIGHT, 180° = DOWN, 270° = LEFT)
+      const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
+      const vx = LAUNCH_VELOCITY * Math.sin(rad);
+      const vy = -LAUNCH_VELOCITY * Math.cos(rad);
+
+      // Overwrite existing array to strictly maintain a single ball on screen
+      balls = [{
+        x: x,
+        y: y,
+        vx: vx,
+        vy: vy,
+        radius: 4,
+        trail: [] // Stores history of past {x, y} coordinates
+      }];
+    }
+
+    function resetSimulation() {
+      balls = [];
+    }
+
+    function updatePhysics() {
+      for (let i = balls.length - 1; i >= 0; i--) {
+        const b = balls[i];
+
+        // Remove ball if it travels too far off-screen (prevents memory leak)
+        const margin = 500;
+        if (b.x < -margin || b.x > canvas.width + margin || 
+            b.y < -margin || b.y > canvas.height + margin) {
+          balls.splice(i, 1);
+          continue;
+        }
+
+        // Distance vector to central gravity node
+        const dx = centralNode.x - b.x;
+        const dy = centralNode.y - b.y;
+        const distSq = dx * dx + dy * dy;
+        const dist = Math.sqrt(distSq);
+
+        // Absorption check: ball collides with central mass
+        if (dist < centralNode.radius + b.radius) {
+          balls.splice(i, 1);
+          continue;
+        }
+
+        // Inverse square law gravity acceleration
+        const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
+
+        // Acceleration vector components
+        const ax = acceleration * (dx / dist);
+        const ay = acceleration * (dy / dist);
+
+        // Update velocity and position
+        b.vx += ax;
+        b.vy += ay;
+        b.x += b.vx;
+        b.y += b.vy;
+
+        // Record position history for line trail
+        b.trail.push({ x: b.x, y: b.y });
+        if (b.trail.length > TRAIL_LENGTH) {
+          b.trail.shift();
+        }
+      }
+    }
+
+    function draw() {
+      // 1. Draw Pre-rendered Milky Way Background
+      ctx.drawImage(bgCanvas, 0, 0);
+
+      // 2. Draw Central Mass Node with Core Glow
+      ctx.save();
+      const nodeGlow = ctx.createRadialGradient(
+        centralNode.x, centralNode.y, 2,
+        centralNode.x, centralNode.y, centralNode.radius * 2.5
+      );
+      nodeGlow.addColorStop(0, 'rgba(255, 255, 255, 1)');
+      nodeGlow.addColorStop(0.4, 'rgba(200, 220, 255, 0.8)');
+      nodeGlow.addColorStop(1, 'rgba(100, 150, 255, 0)');
+      
+      ctx.fillStyle = nodeGlow;
+      ctx.beginPath();
+      ctx.arc(centralNode.x, centralNode.y, centralNode.radius * 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Core sphere
+      ctx.beginPath();
+      ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      // Center marker
+      ctx.beginPath();
+      ctx.arc(centralNode.x, centralNode.y, 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#0a0a20';
+      ctx.fill();
+      ctx.restore();
+
+      // 3. Draw Ball & Orbit Trail
+      for (const b of balls) {
+        // Draw glowing cyan path line
+        if (b.trail.length > 1) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(b.trail[0].x, b.trail[0].y);
+          for (let t = 1; t < b.trail.length; t++) {
+            ctx.lineTo(b.trail[t].x, b.trail[t].y);
+          }
+          ctx.strokeStyle = '#00f0ff';
+          ctx.lineWidth = 1.8;
+          ctx.shadowColor = '#00f0ff';
+          ctx.shadowBlur = 6;
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Draw probe object
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 10;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function animate() {
+      updatePhysics();
+      draw();
+      requestAnimationFrame(animate);
+    }
+
+    window.onload = function() {
+      resizeCanvas();
+      animate();
+    };
+  </script>
+</body>
+</html>
