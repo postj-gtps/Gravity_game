@@ -36,6 +36,7 @@
       margin-bottom: 12px;
       padding-bottom: 8px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+      gap: 12px;
     }
 
     h1 {
@@ -44,6 +45,65 @@
       text-transform: uppercase;
       font-weight: bold;
       text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+    }
+
+    /* Speed Control Container */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-weight: bold;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .controls span {
+      color: #00e5ff;
+      min-width: 24px;
+      display: inline-block;
+      text-align: right;
+    }
+
+    /* Custom Touch-Friendly Range Slider */
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 130px;
+      background: rgba(255, 255, 255, 0.2);
+      height: 6px;
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #00e5ff;
+      cursor: pointer;
+      box-shadow: 0 0 10px #00e5ff;
+      transition: transform 0.1s ease;
+    }
+
+    input[type=range]::-webkit-slider-thumb:active {
+      transform: scale(1.2);
+    }
+
+    input[type=range]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #00e5ff;
+      cursor: pointer;
+      box-shadow: 0 0 10px #00e5ff;
+      border: none;
     }
 
     .btn-reset {
@@ -102,6 +162,13 @@
   <!-- Header Section -->
   <div id="header">
     <h1>Gravity Simulation</h1>
+    
+    <!-- Dynamic Launch Speed Slider -->
+    <div class="controls">
+      <label for="speedSlider">Speed: <span id="speedValue">5</span></label>
+      <input type="range" id="speedSlider" min="1" max="15" value="5" step="0.5" oninput="updateSpeed(this.value)">
+    </div>
+
     <button class="btn-reset" onclick="resetSimulation()">Reset</button>
   </div>
 
@@ -124,12 +191,12 @@
 
     // SIMULATION CONSTANTS
     const GRAVITY_CONSTANT = 1800; // Strength of gravitational pull (G)
-    const LAUNCH_VELOCITY = 5;    // Fixed velocity on launch
     const FIXED_LAUNCH_ANGLE = 90;// Fixed direction in degrees (90° = straight right)
     const TRAIL_LENGTH = 300;     // Number of historic trail points stored
     const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
 
-    // STATE VARIABLES
+    // DYNAMIC STATE VARIABLES
+    let launchVelocity = 5;       // Adjustable launch speed setting
     let balls = [];
 
     // Central Gravity Node Definition
@@ -138,6 +205,11 @@
       y: 0,
       radius: 12
     };
+
+    function updateSpeed(value) {
+      launchVelocity = parseFloat(value);
+      document.getElementById('speedValue').textContent = value;
+    }
 
     function resizeCanvas() {
       const wrapper = document.getElementById('canvas-wrapper');
@@ -300,8 +372,8 @@
     function launchBall(x, y) {
       // Fixed launch direction: 90° (0° = UP, 90° = RIGHT, 180° = DOWN, 270° = LEFT)
       const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
-      const vx = LAUNCH_VELOCITY * Math.sin(rad);  // sin(90°) = 1 -> vx = 5
-      const vy = -LAUNCH_VELOCITY * Math.cos(rad); // cos(90°) = 0 -> vy = 0
+      const vx = launchVelocity * Math.sin(rad);  // Uses current speed slider value
+      const vy = -launchVelocity * Math.cos(rad); 
 
       // Overwrite existing array to strictly maintain a single ball on screen
       balls = [{

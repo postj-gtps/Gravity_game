@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
- <title>Gravity Physics - Stars & Moons Edition</title>
+ <title>Gravity Physics - Deep Universe Edition</title>
  <style>
  * {
  box-sizing: border-box;
@@ -15,7 +15,7 @@
  }
 
  body {
- background-color: #05030a;
+ background-color: #030108;
  color: #ffffff;
  display: flex;
  flex-direction: column;
@@ -36,11 +36,11 @@
  max-width: 1100px;
  margin-bottom: 8px;
  padding: 8px 14px;
- background: rgba(20, 15, 38, 0.7);
+ background: rgba(18, 10, 36, 0.75);
  border: 1px solid #7b2cbf;
  border-radius: 10px;
  box-shadow: 0 0 15px rgba(123, 44, 191, 0.4);
- backdrop-filter: blur(4px);
+ backdrop-filter: blur(6px);
  }
 
  h1 {
@@ -104,7 +104,7 @@
  }
 
  canvas {
- background-color: #05030a;
+ background-color: #030108;
  display: block;
  cursor: crosshair;
  width: 100%;
@@ -127,7 +127,7 @@
 
  <!-- Header Section -->
  <div id="header">
- <h1><span>🚀</span> Gravity Simulation <span class="badge">v2.0</span></h1>
+ <h1><span>🌌</span> Gravity Simulation <span class="badge">v2.1 Universe</span></h1>
  <button class="btn-reset" id="resetBtn">Reset</button>
  </div>
 
@@ -137,7 +137,7 @@
  </div>
 
  <div class="instructions">
- ✨ Tap or click anywhere on space to launch a probe! ✨
+ ✨ Tap or click anywhere in space to launch a probe into the cosmos! ✨
  </div>
 
  <script>
@@ -154,8 +154,10 @@
 
  // STATE VARIABLES
  let balls = [];
- let stars = [];
+ let dimStars = [];
+ let brightStars = [];
  let moons = [];
+ let shootingStars = [];
 
  // Central Gravity Node Definition
  const centralNode = {
@@ -167,41 +169,55 @@
  const STAR_COLORS = [
  '#FFF5A5', // Bright Yellow
  '#70E4EF', // Cyan
- '#FF99C8', // Pink
+ '#FF99C8', // Neon Pink
  '#E4C1F9', // Lavender
- '#A9F59F', // Lime Green
+ '#A9F59F', // Mint Green
  '#FFC6FF', // Neon Violet
- '#FFBD59', // Pastel Orange
- '#FFFFFF' // Bright White
+ '#FFBD59', // Warm Gold
+ '#FFFFFF' // Starlight White
  ];
 
  const MOON_PALETTES = [
- { body: '#70E4EF', shadow: '#105070', crater: '#48bfe3', glow: 'rgba(112, 228, 239, 0.4)', type: 'crater' },
- { body: '#FF99C8', shadow: '#702040', crater: '#f72585', glow: 'rgba(255, 153, 200, 0.4)', type: 'crescent' },
- { body: '#FFBD59', shadow: '#603010', crater: '#ff7b00', glow: 'rgba(255, 189, 89, 0.4)', type: 'crater' },
- { body: '#A9F59F', shadow: '#105020', crater: '#38b000', glow: 'rgba(169, 245, 159, 0.4)', type: 'crescent' },
- { body: '#E4C1F9', shadow: '#401060', crater: '#7209b7', glow: 'rgba(228, 193, 249, 0.4)', type: 'crater' }
+ { body: '#70E4EF', shadow: '#105070', crater: '#48bfe3', glow: 'rgba(112, 228, 239, 0.35)', type: 'crater' },
+ { body: '#FF99C8', shadow: '#702040', crater: '#f72585', glow: 'rgba(255, 153, 200, 0.35)', type: 'crescent' },
+ { body: '#FFBD59', shadow: '#603010', crater: '#ff7b00', glow: 'rgba(255, 189, 89, 0.35)', type: 'crater' },
+ { body: '#A9F59F', shadow: '#105020', crater: '#38b000', glow: 'rgba(169, 245, 159, 0.35)', type: 'crescent' },
+ { body: '#E4C1F9', shadow: '#401060', crater: '#7209b7', glow: 'rgba(228, 193, 249, 0.35)', type: 'crater' }
  ];
 
- function generateCelestialBackground() {
- stars = [];
+ function generateUniverse() {
+ dimStars = [];
+ brightStars = [];
  moons = [];
 
- // Generate ~130 vibrant stars
- const starCount = Math.floor((canvas.width * canvas.height) / 6000);
- for (let i = 0; i < Math.max(starCount, 90); i++) {
- stars.push({
+ const totalArea = canvas.width * canvas.height;
+
+ // 1. Multi-layered Distant Star Dust (Dim background stars)
+ const dimCount = Math.floor(totalArea / 3000);
+ for (let i = 0; i < Math.max(dimCount, 180); i++) {
+ dimStars.push({
  x: Math.random() * canvas.width,
  y: Math.random() * canvas.height,
- radius: Math.random() * 2.2 + 0.6,
+ radius: Math.random() * 1.1 + 0.3,
+ alpha: Math.random() * 0.5 + 0.25
+ });
+ }
+
+ // 2. Bright & Sparkling Foreground Stars
+ const brightCount = Math.floor(totalArea / 7000);
+ for (let i = 0; i < Math.max(brightCount, 90); i++) {
+ brightStars.push({
+ x: Math.random() * canvas.width,
+ y: Math.random() * canvas.height,
+ radius: Math.random() * 2.2 + 0.8,
  color: STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)],
- isSparkle: Math.random() < 0.25, // 25% are 4-point sparkle stars
+ isSparkle: Math.random() < 0.30, // 30% four-point sparkle stars
  twinklePhase: Math.random() * Math.PI * 2,
  twinkleSpeed: 0.02 + Math.random() * 0.04
  });
  }
 
- // Generate 4-5 colorful moons positioned nicely across screen
+ // 3. Moons & Planets positioned across space
  const moonPositions = [
  { xRatio: 0.12, yRatio: 0.22, radius: 28, paletteIdx: 0 },
  { xRatio: 0.86, yRatio: 0.18, radius: 36, paletteIdx: 1 },
@@ -215,15 +231,14 @@
  const moonX = canvas.width * m.xRatio;
  const moonY = canvas.height * m.yRatio;
 
- // Ensure moons don't spawn right on top of central node
+ // Keep moons at a safe distance from the central mass
  const distToCenter = Math.hypot(moonX - centralNode.x, moonY - centralNode.y);
- if (distToCenter > 100) {
+ if (distToCenter > 110) {
  moons.push({
  x: moonX,
  y: moonY,
  radius: m.radius,
  palette: palette,
- angle: Math.random() * Math.PI * 2,
  craters: [
  { dx: -m.radius * 0.3, dy: -m.radius * 0.2, r: m.radius * 0.22 },
  { dx: m.radius * 0.2, dy: m.radius * 0.3, r: m.radius * 0.28 },
@@ -232,6 +247,33 @@
  });
  }
  });
+ }
+
+ function spawnShootingStar() {
+ if (Math.random() < 0.012 && shootingStars.length < 2) {
+ shootingStars.push({
+ x: Math.random() * canvas.width * 0.9,
+ y: Math.random() * (canvas.height * 0.5),
+ length: Math.random() * 70 + 50,
+ speed: Math.random() * 8 + 10,
+ angle: Math.PI / 4 + (Math.random() - 0.5) * 0.2,
+ alpha: 1.0,
+ decay: Math.random() * 0.02 + 0.015
+ });
+ }
+ }
+
+ function updateShootingStars() {
+ for (let i = shootingStars.length - 1; i >= 0; i--) {
+ const ss = shootingStars[i];
+ ss.x += Math.cos(ss.angle) * ss.speed;
+ ss.y += Math.sin(ss.angle) * ss.speed;
+ ss.alpha -= ss.decay;
+
+ if (ss.alpha <= 0 || ss.x > canvas.width + 100 || ss.y > canvas.height + 100) {
+ shootingStars.splice(i, 1);
+ }
+ }
  }
 
  function resizeCanvas() {
@@ -243,13 +285,13 @@
  centralNode.x = canvas.width / 2;
  centralNode.y = canvas.height / 2;
 
- generateCelestialBackground();
+ generateUniverse();
  }
 
  window.addEventListener('resize', resizeCanvas);
  resizeCanvas();
 
- // Use PointerDown for instantaneous response on both touchscreen Chromebooks and mouse
+ // PointerDown handles touchscreen taps on Chromebooks and mouse clicks
  canvas.addEventListener('pointerdown', (e) => {
  e.preventDefault();
  const rect = canvas.getBoundingClientRect();
@@ -264,19 +306,17 @@
  });
 
  function launchBall(x, y) {
- // Fixed launch direction: 90° (0° = UP, 90° = RIGHT, 180° = DOWN, 270° = LEFT)
  const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
- const vx = LAUNCH_VELOCITY * Math.sin(rad); // sin(90°) = 1 -> vx = 5
- const vy = -LAUNCH_VELOCITY * Math.cos(rad); // cos(90°) = 0 -> vy = 0
+ const vx = LAUNCH_VELOCITY * Math.sin(rad);
+ const vy = -LAUNCH_VELOCITY * Math.cos(rad);
 
- // Overwrite existing array to strictly maintain a single ball on screen
  balls = [{
  x: x,
  y: y,
  vx: vx,
  vy: vy,
  radius: 5,
- trail: [] // Stores history of past {x, y} coordinates
+ trail: []
  }];
  }
 
@@ -288,7 +328,6 @@
  for (let i = balls.length - 1; i >= 0; i--) {
  const b = balls[i];
 
- // Remove ball if it travels too far off-screen (prevents memory leak)
  const margin = 500;
  if (b.x < -margin || b.x > canvas.width + margin || 
  b.y < -margin || b.y > canvas.height + margin) {
@@ -296,32 +335,25 @@
  continue;
  }
 
- // Distance vector to central gravity node
  const dx = centralNode.x - b.x;
  const dy = centralNode.y - b.y;
  const distSq = dx * dx + dy * dy;
  const dist = Math.sqrt(distSq);
 
- // Absorption check: ball collides with central mass
  if (dist < centralNode.radius + b.radius) {
  balls.splice(i, 1);
  continue;
  }
 
- // Inverse square law gravity acceleration
  const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
-
- // Acceleration vector components
  const ax = acceleration * (dx / dist);
  const ay = acceleration * (dy / dist);
 
- // Update velocity and position
  b.vx += ax;
  b.vy += ay;
  b.x += b.vx;
  b.y += b.vy;
 
- // Record position history for line trail
  b.trail.push({ x: b.x, y: b.y });
  if (b.trail.length > TRAIL_LENGTH) {
  b.trail.shift();
@@ -329,24 +361,50 @@
  }
  }
 
- function drawSpaceBackground() {
- // Deep space gradient
+ function drawUniverseBackground() {
+ // 1. Deep Space Void Gradient
  const bgGrad = ctx.createRadialGradient(
- canvas.width / 2, canvas.height / 2, 50,
- canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height)
+ canvas.width / 2, canvas.height / 2, 40,
+ canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) * 0.8
  );
- bgGrad.addColorStop(0, '#150a2a');
- bgGrad.addColorStop(0.6, '#090314');
- bgGrad.addColorStop(1, '#030107');
+ bgGrad.addColorStop(0, '#120826');
+ bgGrad.addColorStop(0.55, '#080314');
+ bgGrad.addColorStop(1, '#020106');
  ctx.fillStyle = bgGrad;
  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
- // Render Moons
+ // 2. Cosmic Nebula Clouds
+ const nebulae = [
+ { x: canvas.width * 0.25, y: canvas.height * 0.30, r: canvas.width * 0.38, color: 'rgba(123, 44, 191, 0.11)' },
+ { x: canvas.width * 0.75, y: canvas.height * 0.70, r: canvas.width * 0.42, color: 'rgba(60, 9, 108, 0.16)' },
+ { x: canvas.width * 0.50, y: canvas.height * 0.50, r: canvas.width * 0.32, color: 'rgba(0, 180, 216, 0.07)' }
+ ];
+
+ nebulae.forEach(n => {
+ const nGrad = ctx.createRadialGradient(n.x, n.y, 10, n.x, n.y, n.r);
+ nGrad.addColorStop(0, n.color);
+ nGrad.addColorStop(1, 'rgba(2, 1, 6, 0)');
+ ctx.fillStyle = nGrad;
+ ctx.beginPath();
+ ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+ ctx.fill();
+ });
+
+ // 3. Far Dim Starfield
+ ctx.fillStyle = '#ffffff';
+ dimStars.forEach(s => {
+ ctx.globalAlpha = s.alpha;
+ ctx.beginPath();
+ ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+ ctx.fill();
+ });
+ ctx.globalAlpha = 1.0;
+
+ // 4. Render Moons & Celestial Bodies
  moons.forEach(m => {
  ctx.save();
  ctx.translate(m.x, m.y);
 
- // Outer glow
  const glowGrad = ctx.createRadialGradient(0, 0, m.radius * 0.8, 0, 0, m.radius * 1.6);
  glowGrad.addColorStop(0, m.palette.glow);
  glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
@@ -356,25 +414,21 @@
  ctx.fill();
 
  if (m.palette.type === 'crescent') {
- // Crescent Moon
  ctx.beginPath();
  ctx.arc(0, 0, m.radius, 0, Math.PI * 2);
  ctx.fillStyle = m.palette.body;
  ctx.fill();
 
- // Shadow cutout for crescent
  ctx.beginPath();
  ctx.arc(m.radius * 0.45, -m.radius * 0.2, m.radius * 0.85, 0, Math.PI * 2);
- ctx.fillStyle = '#090314';
+ ctx.fillStyle = '#080314';
  ctx.fill();
  } else {
- // Full Cratered Moon
  ctx.beginPath();
  ctx.arc(0, 0, m.radius, 0, Math.PI * 2);
  ctx.fillStyle = m.palette.body;
  ctx.fill();
 
- // Moon Craters
  m.craters.forEach(c => {
  ctx.beginPath();
  ctx.arc(c.dx, c.dy, c.r, 0, Math.PI * 2);
@@ -385,11 +439,10 @@
  ctx.stroke();
  });
 
- // Shading arc
  const shadeGrad = ctx.createLinearGradient(-m.radius, -m.radius, m.radius, m.radius);
- shadeGrad.addColorStop(0, 'rgba(255,255,255,0.2)');
+ shadeGrad.addColorStop(0, 'rgba(255,255,255,0.22)');
  shadeGrad.addColorStop(0.5, 'rgba(0,0,0,0)');
- shadeGrad.addColorStop(1, 'rgba(0,0,0,0.5)');
+ shadeGrad.addColorStop(1, 'rgba(0,0,0,0.55)');
  ctx.fillStyle = shadeGrad;
  ctx.beginPath();
  ctx.arc(0, 0, m.radius, 0, Math.PI * 2);
@@ -399,20 +452,17 @@
  ctx.restore();
  });
 
- // Render Stars & Sparkles
- const time = Date.now() * 0.002;
- stars.forEach(s => {
+ // 5. Bright Twinkling Stars & Sparkles
+ brightStars.forEach(s => {
  s.twinklePhase += s.twinkleSpeed;
- const alpha = 0.4 + 0.6 * Math.sin(s.twinklePhase);
+ const alpha = 0.35 + 0.65 * Math.sin(s.twinklePhase);
 
  ctx.save();
  ctx.globalAlpha = alpha;
  ctx.fillStyle = s.color;
- ctx.strokeStyle = s.color;
 
  if (s.isSparkle) {
- // Draw 4-point sparkle star
- const size = s.radius * 2.5;
+ const size = s.radius * 2.6;
  ctx.beginPath();
  ctx.moveTo(s.x - size, s.y);
  ctx.quadraticCurveTo(s.x, s.y, s.x, s.y - size);
@@ -421,22 +471,42 @@
  ctx.quadraticCurveTo(s.x, s.y, s.x - size, s.y);
  ctx.fill();
  } else {
- // Draw regular round twinkling star
  ctx.beginPath();
  ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
  ctx.fill();
  }
  ctx.restore();
  });
+
+ // 6. Animated Shooting Stars / Comets
+ updateShootingStars();
+ shootingStars.forEach(ss => {
+ ctx.save();
+ ctx.globalAlpha = ss.alpha;
+ const tailX = ss.x - Math.cos(ss.angle) * ss.length;
+ const tailY = ss.y - Math.sin(ss.angle) * ss.length;
+
+ const streakGrad = ctx.createLinearGradient(ss.x, ss.y, tailX, tailY);
+ streakGrad.addColorStop(0, '#ffffff');
+ streakGrad.addColorStop(0.3, '#70e4ef');
+ streakGrad.addColorStop(1, 'rgba(112, 228, 239, 0)');
+
+ ctx.strokeStyle = streakGrad;
+ ctx.lineWidth = 2;
+ ctx.beginPath();
+ ctx.moveTo(ss.x, ss.y);
+ ctx.lineTo(tailX, tailY);
+ ctx.stroke();
+ ctx.restore();
+ });
  }
 
  function drawPhysicsObjects() {
- // 1. Draw Central Gravity Mass (Sun / Portal)
+ // 1. Central Gravity Mass (Star / Energy Core)
  ctx.save();
- // Glowing corona around central node
  const nodeGlow = ctx.createRadialGradient(
  centralNode.x, centralNode.y, 2,
- centralNode.x, centralNode.y, centralNode.radius * 2.2
+ centralNode.x, centralNode.y, centralNode.radius * 2.3
  );
  nodeGlow.addColorStop(0, '#ffffff');
  nodeGlow.addColorStop(0.4, '#ff9e00');
@@ -445,16 +515,14 @@
 
  ctx.fillStyle = nodeGlow;
  ctx.beginPath();
- ctx.arc(centralNode.x, centralNode.y, centralNode.radius * 2.2, 0, Math.PI * 2);
+ ctx.arc(centralNode.x, centralNode.y, centralNode.radius * 2.3, 0, Math.PI * 2);
  ctx.fill();
 
- // Core central mass
  ctx.beginPath();
  ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
  ctx.fillStyle = '#ffffff';
  ctx.fill();
 
- // Outer energy ring
  ctx.beginPath();
  ctx.arc(centralNode.x, centralNode.y, centralNode.radius + 3, 0, Math.PI * 2);
  ctx.strokeStyle = '#ff9e00';
@@ -462,9 +530,8 @@
  ctx.stroke();
  ctx.restore();
 
- // 2. Draw Ball & Trajectory Line
+ // 2. Probe & Trajectory Tail
  for (const b of balls) {
- // Trajectory line with vibrant neon cyan glow
  if (b.trail.length > 1) {
  ctx.save();
  ctx.beginPath();
@@ -480,7 +547,6 @@
  ctx.restore();
  }
 
- // Draw active ball
  ctx.save();
  ctx.beginPath();
  ctx.arc(b.x, b.y, b.radius + 2, 0, Math.PI * 2);
@@ -498,11 +564,12 @@
  }
 
  function draw() {
- drawSpaceBackground();
+ drawUniverseBackground();
  drawPhysicsObjects();
  }
 
  function animate() {
+ spawnShootingStar();
  updatePhysics();
  draw();
  requestAnimationFrame(animate);

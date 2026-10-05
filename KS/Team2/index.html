@@ -36,7 +36,7 @@
       padding-bottom: 8px;
       border-bottom: 1px solid #ffffff;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 12px;
     }
 
     h1 {
@@ -50,6 +50,7 @@
       display: flex;
       align-items: center;
       gap: 12px;
+      flex-wrap: wrap;
     }
 
     label {
@@ -58,7 +59,7 @@
       letter-spacing: 1px;
     }
 
-    select {
+    select, input[type="number"] {
       background-color: #000000;
       color: #ffffff;
       border: 1px solid #ffffff;
@@ -66,12 +67,17 @@
       font-size: 14px;
       font-weight: bold;
       font-family: inherit;
-      cursor: pointer;
       outline: none;
       border-radius: 0;
     }
 
-    select:focus {
+    input[type="number"] {
+      width: 65px;
+      text-align: center;
+    }
+
+    /* Standardize focus outline across controls */
+    select:focus, input[type="number"]:focus {
       background-color: #111111;
       border-color: #7de3e4;
     }
@@ -150,6 +156,10 @@
         <option value="uranus">Uranus (0.89g)</option>
         <option value="neptune">Neptune (1.14g)</option>
       </select>
+
+      <label for="speedInput">Speed:</label>
+      <input type="number" id="speedInput" value="5" min="0" max="25" step="0.5">
+
       <button class="btn-reset" onclick="resetSimulation()">Reset</button>
     </div>
   </div>
@@ -168,9 +178,10 @@
     const canvas = document.getElementById('simCanvas');
     const ctx = canvas.getContext('2d');
     const planetSelect = document.getElementById('planetSelect');
+    const speedInput = document.getElementById('speedInput');
     const infoBar = document.getElementById('info-bar');
 
-    // PLANET DATA DEFINITIONS (Colors, relative radius, and surface gravity relative to Earth)
+    // PLANET DATA DEFINITIONS
     const PLANET_DATA = {
       mercury: { name: 'Mercury', color: '#b5b5b5', radius: 5, gravityFactor: 0.38 },
       venus:   { name: 'Venus',   color: '#e3bb76', radius: 8, gravityFactor: 0.91 },
@@ -184,9 +195,8 @@
 
     // SIMULATION CONSTANTS
     const BASE_GRAVITY_CONSTANT = 1800; // Base gravitational strength (G)
-    const LAUNCH_VELOCITY = 5;          // Fixed initial speed
     const FIXED_LAUNCH_ANGLE = 90;      // Fixed launch direction in degrees (90° = Right)
-    const TRAIL_LENGTH = 300;           // Historic points stored for tail
+    const TRAIL_LENGTH = 300;            // Historic points stored for tail
     const SOFTENING_FACTOR = 400;       // Prevents infinite acceleration near center
 
     // STATE VARIABLES
@@ -229,10 +239,13 @@
 
     function launchBall(x, y) {
       const selected = PLANET_DATA[planetSelect.value];
+      
+      // Read current launch speed set by user (defaults to 5 if empty or invalid)
+      const launchSpeed = parseFloat(speedInput.value) >= 0 ? parseFloat(speedInput.value) : 5;
 
       const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
-      const vx = LAUNCH_VELOCITY * Math.sin(rad);
-      const vy = -LAUNCH_VELOCITY * Math.cos(rad);
+      const vx = launchSpeed * Math.sin(rad);
+      const vy = -launchSpeed * Math.cos(rad);
 
       // Overwrite current ball with selected planet specs
       balls = [{

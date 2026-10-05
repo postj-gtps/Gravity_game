@@ -114,7 +114,7 @@
 
  // SIMULATION CONSTANTS
  const MAX_BALLS = 20; // Maximum active balls allowed on screen
- const GRAVITY_CONSTANT = 1800; // Strength of gravitational pull (G)
+ const GRAVITY_CONSTANT = 7200; // Increased 4x (1800 -> 7200) to reflect higher mass
  const LAUNCH_VELOCITY = 5; // Fixed velocity on click
  const FIXED_LAUNCH_ANGLE = 90; // Fixed direction in degrees (90° = straight right)
  const TRAIL_LENGTH = 300; // Number of historic trail points stored
@@ -127,7 +127,7 @@
  const centralNode = {
  x: 0,
  y: 0,
- radius: 12
+ radius: 48 // Increased 4x (12 -> 48) for larger size
  };
 
  function resizeCanvas() {
