@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>Gravity Physics Baseline - Rocket Squad</title>
+ <style>
+ * {
+   box-sizing: border-box;
+   user-select: none;
+   margin: 0;
+   padding: 0;
+   font-family: 'Courier New', Courier, monospace, sans-serif;
+ }
+
+ body {
+   background-color: #050510;
+   color: #ffffff;
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   justify-content: flex-start;
+   height: 100vh;
+   overflow: hidden;
+   padding: 16px;
+ }
+
+ /* Top Header Bar */
+ #header {
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+   width: 100%;
+   max-width: 1100px;
+   margin-bottom: 12px;
+   padding-bottom: 8px;
+   border-bottom: 1px solid #334466;
+ }
+
+ h1 {
+   font-size: 18px;
+   letter-spacing: 2px;
+   text-transform: uppercase;
+   font-weight: bold;
+   color: #ffd700;
+   text-shadow: 0 0 8px rgba(255, 215, 0, 0.4);
+ }
+
+ .btn-reset {
+   background: rgba(255, 255, 255, 0.1);
+   color: #ffffff;
+   border: 1px solid #ffd700;
+   padding: 6px 16px;
+   font-size: 14px;
+   font-weight: bold;
+   cursor: pointer;
+   text-transform: uppercase;
+   letter-spacing: 1px;
+   transition: all 0.15s ease-in-out;
+   border-radius: 4px;
+ }
+
+ .btn-reset:hover {
+   background: #ffd700;
+   color: #000000;
+ }
+
+ /* Main Canvas Container */
+ #canvas-wrapper {
+   position: relative;
+   width: 100%;
+   max-width: 1100px;
+   flex-grow: 1;
+   display: flex;
+   justify-content: center;
+   align-items: center;
+ }
+
+ canvas {
+   background-color: #050510;
+   border: 1px solid #334466;
+   display: block;
+   cursor: crosshair;
+   width: 100%;
+   height: 100%;
+   border-radius: 8px;
+   touch-action: none;
+ }
+
+ .instructions {
+   margin-top: 8px;
+   font-size: 12px;
+   color: #aaaacc;
+   text-align: center;
+ }
+ </style>
+</head>
+<body>
+
+ <!-- Header Section -->
+ <div id="header">
+   <h1>Gravity Simulation</h1>
+   <button class="btn-reset" onclick="resetSimulation()">Reset</button>
+ </div>
+
+ <!-- Canvas Container -->
+ <div id="canvas-wrapper">
+   <canvas id="simCanvas"></canvas>
+ </div>
+
+ <div class="instructions">
+   Tap or click anywhere on the canvas to launch a fleet of 5 rocket ships!
+ </div>
+
+ <script>
+ const canvas = document.getElementById('simCanvas');
+ const ctx = canvas.getContext('2d');
+
+ // SIMULATION CONSTANTS
+ const GRAVITY_CONSTANT = 1800; // Strength of gravitational pull (G)
+ const LAUNCH_VELOCITY = 5; // Fixed velocity on click
+ const FIXED_LAUNCH_ANGLE = 90; // Base direction in degrees (90° = straight right)
+ const TRAIL_LENGTH = 300; // Number of historic trail points stored
+ const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
+
+ // STATE VARIABLES
+ let ships = [];
+ let stars = [];
+ let nebulas = [];
+
+ // Central Gravity Node Definition (Yellow Sun)
+ const centralNode = {
+   x: 0,
+   y: 0,
+   radius: 18
+ };
+
+ function generateSpaceBackground() {
+   // Generate starfield
+   stars = [];
+   const starCount = Math.floor((canvas.width * canvas.height) / 3000);
+   for (let i = 0; i < starCount; i++) {
+     stars.push({
+       x: Math.random() * canvas.width,
+       y: Math.random() * canvas.height,
+       radius: Math.random() * 1.5 + 0.5,
+       alpha: Math.random() * 0.8 + 0.2,
+       color: ['#ffffff', '#aadbff', '#ffe3a0', '#ffb3d9'][Math.floor(Math.random() * 4)]
+     });
+   }
+
+   // Generate soft background nebulas
+   nebulas = [
+     { x: canvas.width * 0.2, y: canvas.height * 0.3, radius: Math.max(canvas.width, canvas.height) * 0.35, color: 'rgba(120, 40, 200, 0.22)' },
+     { x: canvas.width * 0.8, y: canvas.height * 0.7, radius: Math.max(canvas.width, canvas.height) * 0.4, color: 'rgba(30, 100, 220, 0.22)' },
+     { x: canvas.width * 0.5, y: canvas.height * 0.8, radius: Math.max(canvas.width, canvas.height) * 0.3, color: 'rgba(220, 50, 120, 0.15)' }
+   ];
+ }
+
+ function resizeCanvas() {
+   const wrapper = document.getElementById('canvas-wrapper');
+   canvas.width = wrapper.clientWidth;
+   canvas.height = wrapper.clientHeight;
+   
+   // Recenter central Sun dynamically
+   centralNode.x = canvas.width / 2;
+   centralNode.y = canvas.height / 2;
+
+   generateSpaceBackground();
+ }
+
+ window.addEventListener('resize', resizeCanvas);
+ resizeCanvas();
+
+ // Touch & Click Handler: Launch 5 ships in a 30-degree spread
+ canvas.addEventListener('pointerdown', (e) => {
+   const rect = canvas.getBoundingClientRect();
+   const clickX = e.clientX - rect.left;
+   const clickY = e.clientY - rect.top;
+
+   launchShips(clickX, clickY);
+ });
+
+ function launchShips(x, y) {
+   const shipCount = 5;
+   const totalSpreadDeg = 30; // 30-degree total spread
+   const startAngle = FIXED_LAUNCH_ANGLE - (totalSpreadDeg / 2); // Start at 75°
+   const angleStep = totalSpreadDeg / (shipCount - 1); // 7.5° increments
+
+   // Colors for individual ships in the fleet
+   const colors = ['#00e5ff', '#ff3366', '#76ff03', '#ffea00', '#d500f9'];
+
+   for (let i = 0; i < shipCount; i++) {
+     const currentAngleDeg = startAngle + (i * angleStep);
+     const rad = (currentAngleDeg * Math.PI) / 180;
+     const vx = LAUNCH_VELOCITY * Math.sin(rad);
+     const vy = -LAUNCH_VELOCITY * Math.cos(rad);
+
+     ships.push({
+       x: x,
+       y: y,
+       vx: vx,
+       vy: vy,
+       radius: 6,
+       color: colors[i % colors.length],
+       trail: []
+     });
+   }
+ }
+
+ function resetSimulation() {
+   ships = [];
+ }
+
+ function updatePhysics() {
+   for (let i = ships.length - 1; i >= 0; i--) {
+     const s = ships[i];
+
+     // Remove ship if it travels too far off-screen
+     const margin = 500;
+     if (s.x < -margin || s.x > canvas.width + margin || 
+         s.y < -margin || s.y > canvas.height + margin) {
+       ships.splice(i, 1);
+       continue;
+     }
+
+     // Distance vector to central sun
+     const dx = centralNode.x - s.x;
+     const dy = centralNode.y - s.y;
+     const distSq = dx * dx + dy * dy;
+     const dist = Math.sqrt(distSq);
+
+     // Absorption check: ship collides with central sun
+     if (dist < centralNode.radius + s.radius) {
+       ships.splice(i, 1);
+       continue;
+     }
+
+     // Inverse square law gravity acceleration
+     const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
+
+     // Acceleration vector components
+     const ax = acceleration * (dx / dist);
+     const ay = acceleration * (dy / dist);
+
+     // Update velocity and position
+     s.vx += ax;
+     s.vy += ay;
+     s.x += s.vx;
+     s.y += s.vy;
+
+     // Record position history for orbit trails
+     s.trail.push({ x: s.x, y: s.y });
+     if (s.trail.length > TRAIL_LENGTH) {
+       s.trail.shift();
+     }
+   }
+ }
+
+ function drawBackground() {
+   // Space fill
+   ctx.fillStyle = '#050512';
+   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+   // Draw background nebulas
+   for (const neb of nebulas) {
+     const grad = ctx.createRadialGradient(neb.x, neb.y, 0, neb.x, neb.y, neb.radius);
+     grad.addColorStop(0, neb.color);
+     grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+     ctx.fillStyle = grad;
+     ctx.fillRect(0, 0, canvas.width, canvas.height);
+   }
+
+   // Draw starfield
+   for (const star of stars) {
+     ctx.save();
+     ctx.globalAlpha = star.alpha;
+     ctx.fillStyle = star.color;
+     ctx.beginPath();
+     ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+     ctx.fill();
+     ctx.restore();
+   }
+ }
+
+ function drawSun() {
+   // Outer corona radial glow
+   const sunGlow = ctx.createRadialGradient(
+     centralNode.x, centralNode.y, centralNode.radius * 0.5,
+     centralNode.x, centralNode.y, centralNode.radius * 3.5
+   );
+   sunGlow.addColorStop(0, 'rgba(255, 220, 50, 0.8)');
+   sunGlow.addColorStop(0.5, 'rgba(255, 140, 0, 0.25)');
+   sunGlow.addColorStop(1, 'rgba(255, 100, 0, 0)');
+
+   ctx.fillStyle = sunGlow;
+   ctx.beginPath();
+   ctx.arc(centralNode.x, centralNode.y, centralNode.radius * 3.5, 0, Math.PI * 2);
+   ctx.fill();
+
+   // Yellow Sun Core
+   const sunBody = ctx.createRadialGradient(
+     centralNode.x - centralNode.radius * 0.3, centralNode.y - centralNode.radius * 0.3, 2,
+     centralNode.x, centralNode.y, centralNode.radius
+   );
+   sunBody.addColorStop(0, '#ffffff');
+   sunBody.addColorStop(0.3, '#fff066');
+   sunBody.addColorStop(0.8, '#ffcc00');
+   sunBody.addColorStop(1, '#ff8800');
+
+   ctx.fillStyle = sunBody;
+   ctx.beginPath();
+   ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
+   ctx.fill();
+ }
+
+ function drawRocket(s) {
+   // Rotate rocket toward direction of movement
+   const angle = Math.atan2(s.vy, s.vx);
+
+   ctx.save();
+   ctx.translate(s.x, s.y);
+   ctx.rotate(angle);
+
+   // Animated Exhaust Flame
+   ctx.fillStyle = '#ff4400';
+   ctx.beginPath();
+   ctx.moveTo(-8, -3);
+   ctx.lineTo(-14 - Math.random() * 5, 0);
+   ctx.lineTo(-8, 3);
+   ctx.closePath();
+   ctx.fill();
+
+   ctx.fillStyle = '#ffea00';
+   ctx.beginPath();
+   ctx.moveTo(-8, -1.5);
+   ctx.lineTo(-11 - Math.random() * 3, 0);
+   ctx.lineTo(-8, 1.5);
+   ctx.closePath();
+   ctx.fill();
+
+   // Rocket Body & Fins
+   ctx.fillStyle = s.color;
+   ctx.beginPath();
+   ctx.moveTo(11, 0);           // Nose cone
+   ctx.lineTo(-6, -6);         // Upper fin
+   ctx.lineTo(-4, 0);          // Engine base
+   ctx.lineTo(-6, 6);          // Lower fin
+   ctx.closePath();
+   ctx.fill();
+
+   // Nose Cone Cap
+   ctx.fillStyle = '#ffffff';
+   ctx.beginPath();
+   ctx.moveTo(11, 0);
+   ctx.lineTo(3, -3);
+   ctx.lineTo(3, 3);
+   ctx.closePath();
+   ctx.fill();
+
+   // Cockpit Window
+   ctx.fillStyle = '#003366';
+   ctx.beginPath();
+   ctx.arc(1, 0, 2, 0, Math.PI * 2);
+   ctx.fill();
+
+   ctx.restore();
+ }
+
+ function draw() {
+   drawBackground();
+   drawSun();
+
+   // Draw Ships & Trails
+   for (const s of ships) {
+     if (s.trail.length > 1) {
+       ctx.beginPath();
+       ctx.moveTo(s.trail[0].x, s.trail[0].y);
+       for (let t = 1; t < s.trail.length; t++) {
+         ctx.lineTo(s.trail[t].x, s.trail[t].y);
+       }
+       ctx.strokeStyle = s.color;
+       ctx.globalAlpha = 0.45;
+       ctx.lineWidth = 1.5;
+       ctx.stroke();
+       ctx.globalAlpha = 1.0;
+     }
+
+     drawRocket(s);
+   }
+ }
+
+ function animate() {
+   updatePhysics();
+   draw();
+   requestAnimationFrame(animate);
+ }
+
+ window.onload = function() {
+   animate();
+ };
+ </script>
+</body>
+</html>
