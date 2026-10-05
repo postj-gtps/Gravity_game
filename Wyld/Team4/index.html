@@ -1,269 +1,423 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gravity Physics Baseline</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            user-select: none;
-            margin: 0;
-            padding: 0;
-            font-family: 'Courier New', Courier, monospace, sans-serif;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gravity Physics Baseline</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      margin: 0;
+      padding: 0;
+      font-family: 'Courier New', Courier, monospace, sans-serif;
+    }
 
-        body {
-            background-color: #000000;
-            color: #ffffff;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-start;
-            height: 100vh;
-            overflow: hidden;
-            padding: 16px;
-        }
+    body {
+      background-color: #03030a;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      height: 100vh;
+      overflow: hidden;
+      padding: 16px;
+    }
 
-        /* Top Header Bar */
-        #header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-            max-width: 1100px;
-            margin-bottom: 12px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #ffffff;
-        }
+    /* Top Header Bar */
+    #header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      max-width: 1100px;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+    }
 
-        h1 {
-            font-size: 18px;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            font-weight: bold;
-        }
+    h1 {
+      font-size: 18px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-weight: bold;
+      text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+    }
 
-        .btn-reset {
-            background: transparent;
-            color: #ffffff;
-            border: 1px solid #ffffff;
-            padding: 6px 16px;
-            font-size: 14px;
-            font-weight: bold;
-            cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            transition: all 0.15s ease-in-out;
-        }
+    .btn-reset {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+      border: 1px solid #ffffff;
+      padding: 6px 16px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: all 0.15s ease-in-out;
+      border-radius: 4px;
+    }
 
-        .btn-reset:hover {
-            background: #ffffff;
-            color: #000000;
-        }
+    .btn-reset:hover {
+      background: #ffffff;
+      color: #000000;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+    }
 
-        /* Main Canvas Container */
-        #canvas-wrapper {
-            position: relative;
-            width: 100%;
-            max-width: 1100px;
-            flex-grow: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
+    /* Main Canvas Container */
+    #canvas-wrapper {
+      position: relative;
+      width: 100%;
+      max-width: 1100px;
+      flex-grow: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
 
-        canvas {
-            background-color: #000000;
-            border: 1px solid #ffffff;
-            display: block;
-            cursor: crosshair;
-            width: 100%;
-            height: 100%;
-        }
+    canvas {
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      display: block;
+      cursor: crosshair;
+      width: 100%;
+      height: 100%;
+      border-radius: 6px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+      touch-action: none;
+    }
 
-        .instructions {
-            margin-top: 8px;
-            font-size: 11px;
-            color: #888888;
-            text-align: center;
-        }
-    </style>
+    .instructions {
+      margin-top: 8px;
+      font-size: 11px;
+      color: #aaaaaa;
+      text-align: center;
+    }
+  </style>
 </head>
 <body>
 
-    <!-- Header Section -->
-    <div id="header">
-        <h1>Gravity Simulation</h1>
-        <button class="btn-reset" onclick="resetSimulation()">Reset</button>
-    </div>
+  <!-- Header Section -->
+  <div id="header">
+    <h1>Gravity Simulation</h1>
+    <button class="btn-reset" onclick="resetSimulation()">Reset</button>
+  </div>
 
-    <!-- Canvas Container -->
-    <div id="canvas-wrapper">
-        <canvas id="simCanvas"></canvas>
-    </div>
+  <!-- Canvas Container -->
+  <div id="canvas-wrapper">
+    <canvas id="simCanvas"></canvas>
+  </div>
 
-    <div class="instructions">
-        Click anywhere on the canvas to launch a ball.
-    </div>
+  <div class="instructions">
+    Click or tap anywhere on the canvas to launch a ball.
+  </div>
 
-    <script>
-        const canvas = document.getElementById('simCanvas');
-        const ctx = canvas.getContext('2d');
+  <script>
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
 
-        // SIMULATION CONSTANTS
-        const GRAVITY_CONSTANT = 1800;    // Strength of gravitational pull (G)
-        const LAUNCH_VELOCITY = 5;         // Fixed velocity on click
-        const FIXED_LAUNCH_ANGLE = 90;     // Fixed direction in degrees (90° = straight right)
-        const TRAIL_LENGTH = 300;         // Number of historic trail points stored
-        const SOFTENING_FACTOR = 400;     // Prevents infinite velocity near center
+    // OFFSCREEN CANVAS FOR COSMIC BACKGROUND BUFFER
+    const bgCanvas = document.createElement('canvas');
+    const bgCtx = bgCanvas.getContext('2d');
 
-        // STATE VARIABLES
-        let balls = [];
+    // SIMULATION CONSTANTS
+    const GRAVITY_CONSTANT = 1800; // Strength of gravitational pull (G)
+    const LAUNCH_VELOCITY = 5; // Fixed velocity on click
+    const FIXED_LAUNCH_ANGLE = 90; // Fixed direction in degrees (90° = straight right)
+    const TRAIL_LENGTH = 300; // Number of historic trail points stored
+    const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
 
-        // Central Gravity Node Definition
-        const centralNode = {
-            x: 0,
-            y: 0,
-            radius: 12
-        };
+    // STATE VARIABLES
+    let balls = [];
 
-        function resizeCanvas() {
-            const wrapper = document.getElementById('canvas-wrapper');
-            canvas.width = wrapper.clientWidth;
-            canvas.height = wrapper.clientHeight;
-            
-            // Recenter gravity node dynamically
-            centralNode.x = canvas.width / 2;
-            centralNode.y = canvas.height / 2;
+    // Central Gravity Node Definition
+    const centralNode = {
+      x: 0,
+      y: 0,
+      radius: 12
+    };
+
+    function generateSpaceBackground() {
+      bgCanvas.width = canvas.width;
+      bgCanvas.height = canvas.height;
+
+      // Deep space base gradient
+      const spaceGradient = bgCtx.createRadialGradient(
+        bgCanvas.width / 2, bgCanvas.height / 2, 50,
+        bgCanvas.width / 2, bgCanvas.height / 2, Math.max(bgCanvas.width, bgCanvas.height)
+      );
+      spaceGradient.addColorStop(0, '#060614');
+      spaceGradient.addColorStop(1, '#020206');
+      bgCtx.fillStyle = spaceGradient;
+      bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+      // 1. Draw Nebulae Clouds (Glowing Radial Gradients)
+      const nebulaConfigs = [
+        { xRatio: 0.25, yRatio: 0.3, radiusRatio: 0.35, color: 'rgba(128, 0, 128, 0.18)' },  // Purple
+        { xRatio: 0.75, yRatio: 0.25, radiusRatio: 0.3, color: 'rgba(0, 150, 255, 0.15)' },  // Cyan
+        { xRatio: 0.3, yRatio: 0.75, radiusRatio: 0.4, color: 'rgba(255, 0, 128, 0.12)' },  // Magenta
+        { xRatio: 0.8, yRatio: 0.7, radiusRatio: 0.35, color: 'rgba(0, 200, 150, 0.12)' }   // Teal
+      ];
+
+      nebulaConfigs.forEach(neb => {
+        const x = bgCanvas.width * neb.xRatio;
+        const y = bgCanvas.height * neb.yRatio;
+        const radius = Math.min(bgCanvas.width, bgCanvas.height) * neb.radiusRatio;
+
+        const grad = bgCtx.createRadialGradient(x, y, 0, x, y, radius);
+        grad.addColorStop(0, neb.color);
+        grad.addColorStop(0.5, neb.color.replace(/[\d\.]+\)$/, '0.05)'));
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+        bgCtx.fillStyle = grad;
+        bgCtx.beginPath();
+        bgCtx.arc(x, y, radius, 0, Math.PI * 2);
+        bgCtx.fill();
+      });
+
+      // 2. Draw Galaxies
+      drawGalaxy(bgCtx, bgCanvas.width * 0.18, bgCanvas.height * 0.25, 65, -0.4, '#a8b5ff', '#ff88cc');
+      drawGalaxy(bgCtx, bgCanvas.width * 0.82, bgCanvas.height * 0.75, 80, 0.5, '#ffccaa', '#66ccff');
+
+      // 3. Draw Star Field
+      const numStars = Math.floor((bgCanvas.width * bgCanvas.height) / 2800);
+      for (let i = 0; i < numStars; i++) {
+        const sx = Math.random() * bgCanvas.width;
+        const sy = Math.random() * bgCanvas.height;
+        const size = Math.random() * 1.6 + 0.3;
+
+        // Color variation (White, Blue, Warm Yellow)
+        const randColor = Math.random();
+        const starColor = randColor < 0.6 ? '#ffffff' : (randColor < 0.8 ? '#b9d5ff' : '#ffe1b9');
+        const alpha = Math.random() * 0.7 + 0.3;
+
+        bgCtx.fillStyle = starColor;
+        bgCtx.globalAlpha = alpha;
+        bgCtx.beginPath();
+        bgCtx.arc(sx, sy, size, 0, Math.PI * 2);
+        bgCtx.fill();
+
+        // Cross-flare for larger stars
+        if (size > 1.6 && Math.random() < 0.25) {
+          bgCtx.strokeStyle = starColor;
+          bgCtx.lineWidth = 0.5;
+          bgCtx.beginPath();
+          bgCtx.moveTo(sx - size * 2.5, sy);
+          bgCtx.lineTo(sx + size * 2.5, sy);
+          bgCtx.moveTo(sx, sy - size * 2.5);
+          bgCtx.lineTo(sx, sy + size * 2.5);
+          bgCtx.stroke();
+        }
+      }
+      bgCtx.globalAlpha = 1.0;
+    }
+
+    function drawGalaxy(ctx, x, y, radius, angle, coreColor, armColor) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.scale(1, 0.45); // Flatten for tilted 3D perspective
+
+      // Bright Galactic Core
+      const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 0.35);
+      coreGrad.addColorStop(0, '#ffffff');
+      coreGrad.addColorStop(0.3, coreColor);
+      coreGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = coreGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Spiral Arm Particles
+      const numParticles = 110;
+      for (let i = 0; i < numParticles; i++) {
+        const theta = (i / numParticles) * Math.PI * 5;
+        const r = (i / numParticles) * radius;
+
+        ctx.fillStyle = armColor;
+        ctx.globalAlpha = Math.max(0, (1 - r / radius) * 0.5);
+
+        // Arm 1
+        const x1 = r * Math.cos(theta);
+        const y1 = r * Math.sin(theta);
+        ctx.beginPath();
+        ctx.arc(x1, y1, Math.random() * 1.4 + 0.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Arm 2 (Opposite)
+        const x2 = r * Math.cos(theta + Math.PI);
+        const y2 = r * Math.sin(theta + Math.PI);
+        ctx.beginPath();
+        ctx.arc(x2, y2, Math.random() * 1.4 + 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+      ctx.globalAlpha = 1.0;
+    }
+
+    function resizeCanvas() {
+      const wrapper = document.getElementById('canvas-wrapper');
+      canvas.width = wrapper.clientWidth;
+      canvas.height = wrapper.clientHeight;
+      
+      // Recenter gravity node dynamically
+      centralNode.x = canvas.width / 2;
+      centralNode.y = canvas.height / 2;
+
+      // Re-generate background buffer for current viewport
+      generateSpaceBackground();
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Mouse Click Handler
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+      launchBall(clickX, clickY);
+    });
+
+    // Touchscreen Tap Handler for Chromebooks
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const touch = e.touches[0];
+      const touchX = touch.clientX - rect.left;
+      const touchY = touch.clientY - rect.top;
+      launchBall(touchX, touchY);
+    });
+
+    function launchBall(x, y) {
+      // Fixed launch direction: 90° (0° = UP, 90° = RIGHT, 180° = DOWN, 270° = LEFT)
+      const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
+      const vx = LAUNCH_VELOCITY * Math.sin(rad);
+      const vy = -LAUNCH_VELOCITY * Math.cos(rad);
+
+      // Overwrite existing array to strictly maintain a single ball on screen
+      balls = [{
+        x: x,
+        y: y,
+        vx: vx,
+        vy: vy,
+        radius: 4,
+        trail: [] // Stores history of past {x, y} coordinates
+      }];
+    }
+
+    function resetSimulation() {
+      balls = [];
+    }
+
+    function updatePhysics() {
+      for (let i = balls.length - 1; i >= 0; i--) {
+        const b = balls[i];
+
+        // Distance vector to central gravity node
+        const dx = centralNode.x - b.x;
+        const dy = centralNode.y - b.y;
+        const distSq = dx * dx + dy * dy;
+        const dist = Math.sqrt(distSq);
+
+        // Absorption check: ball collides with central mass
+        if (dist < centralNode.radius + b.radius) {
+          balls.splice(i, 1);
+          continue;
         }
 
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
+        // Inverse square law gravity acceleration
+        const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
 
-        // Canvas Click Handler: Directly launch ball at click position
-        canvas.addEventListener('click', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const clickY = e.clientY - rect.top;
+        // Acceleration vector components
+        const ax = acceleration * (dx / dist);
+        const ay = acceleration * (dy / dist);
 
-            launchBall(clickX, clickY);
-        });
+        // Update velocity and position
+        b.vx += ax;
+        b.vy += ay;
+        b.x += b.vx;
+        b.y += b.vy;
 
-        function launchBall(x, y) {
-            // Fixed launch direction: 90° (0° = UP, 90° = RIGHT, 180° = DOWN, 270° = LEFT)
-            const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
-            const vx = LAUNCH_VELOCITY * Math.sin(rad);  // sin(90°) = 1  -> vx = 5
-            const vy = -LAUNCH_VELOCITY * Math.cos(rad); // cos(90°) = 0  -> vy = 0
-
-            // Overwrite existing array to strictly maintain a single ball on screen
-            balls = [{
-                x: x,
-                y: y,
-                vx: vx,
-                vy: vy,
-                radius: 4,
-                trail: [] // Stores history of past {x, y} coordinates
-            }];
+        // Wall Bouncing Logic (Left, Right, Top, Bottom)
+        if (b.x - b.radius < 0) {
+          b.x = b.radius;
+          b.vx = Math.abs(b.vx);
+        } else if (b.x + b.radius > canvas.width) {
+          b.x = canvas.width - b.radius;
+          b.vx = -Math.abs(b.vx);
         }
 
-        function resetSimulation() {
-            balls = [];
+        if (b.y - b.radius < 0) {
+          b.y = b.radius;
+          b.vy = Math.abs(b.vy);
+        } else if (b.y + b.radius > canvas.height) {
+          b.y = canvas.height - b.radius;
+          b.vy = -Math.abs(b.vy);
         }
 
-        function updatePhysics() {
-            for (let i = balls.length - 1; i >= 0; i--) {
-                const b = balls[i];
+        // Record position history for line trail
+        b.trail.push({ x: b.x, y: b.y });
+        if (b.trail.length > TRAIL_LENGTH) {
+          b.trail.shift();
+        }
+      }
+    }
 
-                // Remove ball if it travels too far off-screen (prevents memory leak)
-                const margin = 500;
-                if (b.x < -margin || b.x > canvas.width + margin || 
-                    b.y < -margin || b.y > canvas.height + margin) {
-                    balls.splice(i, 1);
-                    continue;
-                }
+    function draw() {
+      // 1. Render Offscreen Cosmic Background
+      ctx.drawImage(bgCanvas, 0, 0);
 
-                // Distance vector to central gravity node
-                const dx = centralNode.x - b.x;
-                const dy = centralNode.y - b.y;
-                const distSq = dx * dx + dy * dy;
-                const dist = Math.sqrt(distSq);
+      // 2. Draw Central Mass Node
+      ctx.beginPath();
+      ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#00f0ff';
+      ctx.shadowBlur = 12;
+      ctx.fill();
+      ctx.shadowBlur = 0; // Reset shadow
 
-                // Absorption check: ball collides with central mass
-                if (dist < centralNode.radius + b.radius) {
-                    balls.splice(i, 1);
-                    continue;
-                }
+      // Center mark on node
+      ctx.beginPath();
+      ctx.arc(centralNode.x, centralNode.y, 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#000000';
+      ctx.fill();
 
-                // Inverse square law gravity acceleration
-                const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
-
-                // Acceleration vector components
-                const ax = acceleration * (dx / dist);
-                const ay = acceleration * (dy / dist);
-
-                // Update velocity and position
-                b.vx += ax;
-                b.vy += ay;
-                b.x += b.vx;
-                b.y += b.vy;
-
-                // Record position history for line trail
-                b.trail.push({ x: b.x, y: b.y });
-                if (b.trail.length > TRAIL_LENGTH) {
-                    b.trail.shift();
-                }
-            }
+      // 3. Draw Ball & Trail
+      for (const b of balls) {
+        // Draw path line
+        if (b.trail.length > 1) {
+          ctx.beginPath();
+          ctx.moveTo(b.trail[0].x, b.trail[0].y);
+          for (let t = 1; t < b.trail.length; t++) {
+            ctx.lineTo(b.trail[t].x, b.trail[t].y);
+          }
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
         }
 
-        function draw() {
-            // Clear canvas background
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Draw ball object with slight glow
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 8;
+        ctx.fill();
+        ctx.shadowBlur = 0; // Reset shadow
+      }
+    }
 
-            // 1. Draw Central Mass Node
-            ctx.beginPath();
-            ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
-            ctx.fillStyle = '#ffffff';
-            ctx.fill();
+    function animate() {
+      updatePhysics();
+      draw();
+      requestAnimationFrame(animate);
+    }
 
-            // Center mark on node
-            ctx.beginPath();
-            ctx.arc(centralNode.x, centralNode.y, 2, 0, Math.PI * 2);
-            ctx.fillStyle = '#000000';
-            ctx.fill();
-
-            // 2. Draw Ball & Trail
-            for (const b of balls) {
-                // Draw path line
-                if (b.trail.length > 1) {
-                    ctx.beginPath();
-                    ctx.moveTo(b.trail[0].x, b.trail[0].y);
-                    for (let t = 1; t < b.trail.length; t++) {
-                        ctx.lineTo(b.trail[t].x, b.trail[t].y);
-                    }
-                    ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 1.2;
-                    ctx.stroke();
-                }
-
-                // Draw ball object
-                ctx.beginPath();
-                ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-                ctx.fillStyle = '#ffffff';
-                ctx.fill();
-            }
-        }
-
-        function animate() {
-            updatePhysics();
-            draw();
-            requestAnimationFrame(animate);
-        }
-
-        window.onload = function() {
-            animate();
-        };
-    </script>
+    window.onload = function() {
+      animate();
+    };
+  </script>
 </body>
 </html>

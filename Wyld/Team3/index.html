@@ -1,269 +1,495 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gravity Physics Baseline</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            user-select: none;
-            margin: 0;
-            padding: 0;
-            font-family: 'Courier New', Courier, monospace, sans-serif;
-        }
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>Gravity Physics - Space Background Edition</title>
+ <style>
+ * {
+ box-sizing: border-box;
+ user-select: none;
+ margin: 0;
+ padding: 0;
+ font-family: 'Courier New', Courier, monospace, sans-serif;
+ }
 
-        body {
-            background-color: #000000;
-            color: #ffffff;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-start;
-            height: 100vh;
-            overflow: hidden;
-            padding: 16px;
-        }
+ body {
+ background-color: #000000;
+ color: #ffffff;
+ display: flex;
+ flex-direction: column;
+ align-items: center;
+ justify-content: flex-start;
+ height: 100vh;
+ overflow: hidden;
+ padding: 16px;
+ }
 
-        /* Top Header Bar */
-        #header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-            max-width: 1100px;
-            margin-bottom: 12px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #ffffff;
-        }
+ /* Top Header Bar */
+ #header {
+ display: flex;
+ justify-content: space-between;
+ align-items: center;
+ width: 100%;
+ max-width: 1100px;
+ margin-bottom: 12px;
+ padding-bottom: 8px;
+ border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+ }
 
-        h1 {
-            font-size: 18px;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            font-weight: bold;
-        }
+ h1 {
+ font-size: 18px;
+ letter-spacing: 2px;
+ text-transform: uppercase;
+ font-weight: bold;
+ background: linear-gradient(90deg, #38bdf8, #a855f7, #ec4899);
+ -webkit-background-clip: text;
+ -webkit-text-fill-color: transparent;
+ }
 
-        .btn-reset {
-            background: transparent;
-            color: #ffffff;
-            border: 1px solid #ffffff;
-            padding: 6px 16px;
-            font-size: 14px;
-            font-weight: bold;
-            cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            transition: all 0.15s ease-in-out;
-        }
+ .btn-reset {
+ background: rgba(255, 255, 255, 0.05);
+ color: #ffffff;
+ border: 1px solid rgba(255, 255, 255, 0.6);
+ padding: 6px 16px;
+ font-size: 14px;
+ font-weight: bold;
+ cursor: pointer;
+ text-transform: uppercase;
+ letter-spacing: 1px;
+ border-radius: 4px;
+ transition: all 0.15s ease-in-out;
+ }
 
-        .btn-reset:hover {
-            background: #ffffff;
-            color: #000000;
-        }
+ .btn-reset:hover {
+ background: #ffffff;
+ color: #000000;
+ box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+ }
 
-        /* Main Canvas Container */
-        #canvas-wrapper {
-            position: relative;
-            width: 100%;
-            max-width: 1100px;
-            flex-grow: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
+ /* Main Canvas Container */
+ #canvas-wrapper {
+ position: relative;
+ width: 100%;
+ max-width: 1100px;
+ flex-grow: 1;
+ display: flex;
+ justify-content: center;
+ align-items: center;
+ }
 
-        canvas {
-            background-color: #000000;
-            border: 1px solid #ffffff;
-            display: block;
-            cursor: crosshair;
-            width: 100%;
-            height: 100%;
-        }
+ canvas {
+ background-color: #000000;
+ border: 1px solid rgba(255, 255, 255, 0.2);
+ border-radius: 6px;
+ display: block;
+ cursor: crosshair;
+ width: 100%;
+ height: 100%;
+ }
 
-        .instructions {
-            margin-top: 8px;
-            font-size: 11px;
-            color: #888888;
-            text-align: center;
-        }
-    </style>
+ .instructions {
+ margin-top: 8px;
+ font-size: 11px;
+ color: #aaaaaa;
+ text-align: center;
+ }
+ </style>
 </head>
 <body>
 
-    <!-- Header Section -->
-    <div id="header">
-        <h1>Gravity Simulation</h1>
-        <button class="btn-reset" onclick="resetSimulation()">Reset</button>
-    </div>
+ <!-- Header Section -->
+ <div id="header">
+ <h1>Gravity Simulation</h1>
+ <button class="btn-reset" onclick="resetSimulation()">Reset</button>
+ </div>
 
-    <!-- Canvas Container -->
-    <div id="canvas-wrapper">
-        <canvas id="simCanvas"></canvas>
-    </div>
+ <!-- Canvas Container -->
+ <div id="canvas-wrapper">
+ <canvas id="simCanvas"></canvas>
+ </div>
 
-    <div class="instructions">
-        Click anywhere on the canvas to launch a ball.
-    </div>
+ <div class="instructions">
+ Click or touch anywhere on the canvas to launch Earth into orbit.
+ </div>
 
-    <script>
-        const canvas = document.getElementById('simCanvas');
-        const ctx = canvas.getContext('2d');
+ <script>
+ const canvas = document.getElementById('simCanvas');
+ const ctx = canvas.getContext('2d');
 
-        // SIMULATION CONSTANTS
-        const GRAVITY_CONSTANT = 1800;    // Strength of gravitational pull (G)
-        const LAUNCH_VELOCITY = 5;         // Fixed velocity on click
-        const FIXED_LAUNCH_ANGLE = 90;     // Fixed direction in degrees (90° = straight right)
-        const TRAIL_LENGTH = 300;         // Number of historic trail points stored
-        const SOFTENING_FACTOR = 400;     // Prevents infinite velocity near center
+ // Offscreen canvas for rendering space background smoothly on Chromebooks
+ const bgCanvas = document.createElement('canvas');
+ const bgCtx = bgCanvas.getContext('2d');
 
-        // STATE VARIABLES
-        let balls = [];
+ // SIMULATION CONSTANTS
+ const GRAVITY_CONSTANT = 1800; // Strength of gravitational pull (G)
+ const LAUNCH_VELOCITY = 5; // Fixed velocity on click
+ const FIXED_LAUNCH_ANGLE = 90; // Fixed direction in degrees (90° = straight right)
+ const TRAIL_LENGTH = 300; // Number of historic trail points stored
+ const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
 
-        // Central Gravity Node Definition
-        const centralNode = {
-            x: 0,
-            y: 0,
-            radius: 12
-        };
+ // STATE VARIABLES
+ let balls = [];
 
-        function resizeCanvas() {
-            const wrapper = document.getElementById('canvas-wrapper');
-            canvas.width = wrapper.clientWidth;
-            canvas.height = wrapper.clientHeight;
-            
-            // Recenter gravity node dynamically
-            centralNode.x = canvas.width / 2;
-            centralNode.y = canvas.height / 2;
-        }
+ // Central Gravity Node Definition
+ const centralNode = {
+ x: 0,
+ y: 0,
+ radius: 14
+ };
 
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
+ function resizeCanvas() {
+ const wrapper = document.getElementById('canvas-wrapper');
+ canvas.width = wrapper.clientWidth;
+ canvas.height = wrapper.clientHeight;
+ 
+ // Recenter gravity node dynamically
+ centralNode.x = canvas.width / 2;
+ centralNode.y = canvas.height / 2;
 
-        // Canvas Click Handler: Directly launch ball at click position
-        canvas.addEventListener('click', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const clickY = e.clientY - rect.top;
+ // Re-generate procedural space background for current screen resolution
+ generateSpaceBackground();
+ }
 
-            launchBall(clickX, clickY);
-        });
+ function generateSpaceBackground() {
+ bgCanvas.width = canvas.width;
+ bgCanvas.height = canvas.height;
 
-        function launchBall(x, y) {
-            // Fixed launch direction: 90° (0° = UP, 90° = RIGHT, 180° = DOWN, 270° = LEFT)
-            const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
-            const vx = LAUNCH_VELOCITY * Math.sin(rad);  // sin(90°) = 1  -> vx = 5
-            const vy = -LAUNCH_VELOCITY * Math.cos(rad); // cos(90°) = 0  -> vy = 0
+ // 1. Deep Space Base
+ bgCtx.fillStyle = '#020208';
+ bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
 
-            // Overwrite existing array to strictly maintain a single ball on screen
-            balls = [{
-                x: x,
-                y: y,
-                vx: vx,
-                vy: vy,
-                radius: 4,
-                trail: [] // Stores history of past {x, y} coordinates
-            }];
-        }
+ // 2. Multi-colored Glowing Nebulae
+ const nebulae = [
+ { x: bgCanvas.width * 0.2, y: bgCanvas.height * 0.3, r: bgCanvas.width * 0.4, color: 'rgba(138, 43, 226, 0.18)' },
+ { x: bgCanvas.width * 0.8, y: bgCanvas.height * 0.7, r: bgCanvas.width * 0.35, color: 'rgba(0, 191, 255, 0.15)' },
+ { x: bgCanvas.width * 0.5, y: bgCanvas.height * 0.8, r: bgCanvas.width * 0.3, color: 'rgba(255, 20, 147, 0.12)' },
+ { x: bgCanvas.width * 0.85, y: bgCanvas.height * 0.2, r: bgCanvas.width * 0.25, color: 'rgba(75, 0, 130, 0.2)' }
+ ];
 
-        function resetSimulation() {
-            balls = [];
-        }
+ nebulae.forEach(n => {
+ const grad = bgCtx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.r);
+ grad.addColorStop(0, n.color);
+ grad.addColorStop(0.6, n.color.replace(/[\d\.]+\)$/, '0.05)'));
+ grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+ bgCtx.fillStyle = grad;
+ bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+ });
 
-        function updatePhysics() {
-            for (let i = balls.length - 1; i >= 0; i--) {
-                const b = balls[i];
+ // 3. Dense Starfield
+ const numStars = Math.floor((bgCanvas.width * bgCanvas.height) / 2800);
+ const colors = ['#ffffff', '#e0f7fa', '#fff9c4', '#ffe0b2', '#f3e5f5'];
 
-                // Remove ball if it travels too far off-screen (prevents memory leak)
-                const margin = 500;
-                if (b.x < -margin || b.x > canvas.width + margin || 
-                    b.y < -margin || b.y > canvas.height + margin) {
-                    balls.splice(i, 1);
-                    continue;
-                }
+ for (let i = 0; i < numStars; i++) {
+ const sx = Math.random() * bgCanvas.width;
+ const sy = Math.random() * bgCanvas.height;
+ const size = Math.random() < 0.88 ? (Math.random() * 1.1 + 0.3) : (Math.random() * 1.8 + 1.2);
+ const alpha = Math.random() * 0.7 + 0.3;
+ const starColor = colors[Math.floor(Math.random() * colors.length)];
 
-                // Distance vector to central gravity node
-                const dx = centralNode.x - b.x;
-                const dy = centralNode.y - b.y;
-                const distSq = dx * dx + dy * dy;
-                const dist = Math.sqrt(distSq);
+ bgCtx.save();
+ bgCtx.globalAlpha = alpha;
+ bgCtx.fillStyle = starColor;
+ bgCtx.beginPath();
+ bgCtx.arc(sx, sy, size, 0, Math.PI * 2);
+ bgCtx.fill();
 
-                // Absorption check: ball collides with central mass
-                if (dist < centralNode.radius + b.radius) {
-                    balls.splice(i, 1);
-                    continue;
-                }
+ // Cross-flare effect for large bright stars
+ if (size > 2.0) {
+ bgCtx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+ bgCtx.lineWidth = 0.5;
+ bgCtx.beginPath();
+ bgCtx.moveTo(sx - size * 2.5, sy);
+ bgCtx.lineTo(sx + size * 2.5, sy);
+ bgCtx.moveTo(sx, sy - size * 2.5);
+ bgCtx.lineTo(sx, sy + size * 2.5);
+ bgCtx.stroke();
+ }
+ bgCtx.restore();
+ }
 
-                // Inverse square law gravity acceleration
-                const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
+ // 4. Distant Galaxies
+ drawDistantGalaxy(bgCtx, bgCanvas.width * 0.16, bgCanvas.height * 0.22, 40, 0.65, '#c084fc', '#38bdf8');
+ drawDistantGalaxy(bgCtx, bgCanvas.width * 0.82, bgCanvas.height * 0.78, -35, 0.5, '#f472b6', '#818cf8');
 
-                // Acceleration vector components
-                const ax = acceleration * (dx / dist);
-                const ay = acceleration * (dy / dist);
+ // 5. Distant Background Planets
+ // Blue Gas Giant with Saturn-like Rings
+ drawBackgroundPlanet(bgCtx, bgCanvas.width * 0.86, bgCanvas.height * 0.22, 20, '#38bdf8', '#1e3a8a', true);
+ // Orange Desert Planet
+ drawBackgroundPlanet(bgCtx, bgCanvas.width * 0.11, bgCanvas.height * 0.8, 14, '#f97316', '#7c2d12', false);
+ }
 
-                // Update velocity and position
-                b.vx += ax;
-                b.vy += ay;
-                b.x += b.vx;
-                b.y += b.vy;
+ function drawDistantGalaxy(gCtx, x, y, angleDeg, scale, coreColor, armColor) {
+ gCtx.save();
+ gCtx.translate(x, y);
+ gCtx.rotate((angleDeg * Math.PI) / 180);
+ gCtx.scale(scale, scale * 0.45);
 
-                // Record position history for line trail
-                b.trail.push({ x: b.x, y: b.y });
-                if (b.trail.length > TRAIL_LENGTH) {
-                    b.trail.shift();
-                }
-            }
-        }
+ const hazeGrad = gCtx.createRadialGradient(0, 0, 4, 0, 0, 60);
+ hazeGrad.addColorStop(0, armColor);
+ hazeGrad.addColorStop(0.5, 'rgba(168, 85, 247, 0.18)');
+ hazeGrad.addColorStop(1, 'transparent');
+ gCtx.fillStyle = hazeGrad;
+ gCtx.beginPath();
+ gCtx.arc(0, 0, 60, 0, Math.PI * 2);
+ gCtx.fill();
 
-        function draw() {
-            // Clear canvas background
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+ gCtx.fillStyle = armColor;
+ for (let i = 0; i < 110; i++) {
+ const a = i * 0.12;
+ const r = 4 + a * 3.8;
+ const opacity = Math.max(0, 1 - r / 60);
+ gCtx.globalAlpha = opacity * 0.65;
 
-            // 1. Draw Central Mass Node
-            ctx.beginPath();
-            ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
-            ctx.fillStyle = '#ffffff';
-            ctx.fill();
+ gCtx.beginPath();
+ gCtx.arc(r * Math.cos(a), r * Math.sin(a), Math.random() * 1.8 + 0.8, 0, Math.PI * 2);
+ gCtx.fill();
 
-            // Center mark on node
-            ctx.beginPath();
-            ctx.arc(centralNode.x, centralNode.y, 2, 0, Math.PI * 2);
-            ctx.fillStyle = '#000000';
-            ctx.fill();
+ gCtx.beginPath();
+ gCtx.arc(-r * Math.cos(a), -r * Math.sin(a), Math.random() * 1.8 + 0.8, 0, Math.PI * 2);
+ gCtx.fill();
+ }
 
-            // 2. Draw Ball & Trail
-            for (const b of balls) {
-                // Draw path line
-                if (b.trail.length > 1) {
-                    ctx.beginPath();
-                    ctx.moveTo(b.trail[0].x, b.trail[0].y);
-                    for (let t = 1; t < b.trail.length; t++) {
-                        ctx.lineTo(b.trail[t].x, b.trail[t].y);
-                    }
-                    ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 1.2;
-                    ctx.stroke();
-                }
+ gCtx.globalAlpha = 1.0;
+ const coreGrad = gCtx.createRadialGradient(0, 0, 0, 0, 0, 15);
+ coreGrad.addColorStop(0, '#ffffff');
+ coreGrad.addColorStop(0.4, coreColor);
+ coreGrad.addColorStop(1, 'transparent');
+ gCtx.fillStyle = coreGrad;
+ gCtx.beginPath();
+ gCtx.arc(0, 0, 15, 0, Math.PI * 2);
+ gCtx.fill();
 
-                // Draw ball object
-                ctx.beginPath();
-                ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-                ctx.fillStyle = '#ffffff';
-                ctx.fill();
-            }
-        }
+ gCtx.restore();
+ }
 
-        function animate() {
-            updatePhysics();
-            draw();
-            requestAnimationFrame(animate);
-        }
+ function drawBackgroundPlanet(gCtx, x, y, radius, color1, color2, hasRings) {
+ gCtx.save();
+ gCtx.translate(x, y);
 
-        window.onload = function() {
-            animate();
-        };
-    </script>
+ if (hasRings) {
+ gCtx.save();
+ gCtx.rotate((-22 * Math.PI) / 180);
+ gCtx.scale(1, 0.28);
+ gCtx.beginPath();
+ gCtx.arc(0, 0, radius * 2.2, 0, Math.PI * 2);
+ gCtx.strokeStyle = 'rgba(216, 180, 254, 0.5)';
+ gCtx.lineWidth = radius * 0.45;
+ gCtx.stroke();
+ gCtx.restore();
+ }
+
+ const pGrad = gCtx.createRadialGradient(-radius * 0.35, -radius * 0.35, radius * 0.1, 0, 0, radius);
+ pGrad.addColorStop(0, color1);
+ pGrad.addColorStop(0.7, color2);
+ pGrad.addColorStop(1, '#030308');
+
+ gCtx.fillStyle = pGrad;
+ gCtx.beginPath();
+ gCtx.arc(0, 0, radius, 0, Math.PI * 2);
+ gCtx.fill();
+
+ gCtx.beginPath();
+ gCtx.arc(0, 0, radius + 1, 0, Math.PI * 2);
+ gCtx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+ gCtx.lineWidth = 1;
+ gCtx.stroke();
+
+ gCtx.restore();
+ }
+
+ window.addEventListener('resize', resizeCanvas);
+ resizeCanvas();
+
+ // Canvas Click / Touch Handler: Launch Earth at position
+ canvas.addEventListener('pointerdown', (e) => {
+ const rect = canvas.getBoundingClientRect();
+ const clickX = e.clientX - rect.left;
+ const clickY = e.clientY - rect.top;
+
+ launchBall(clickX, clickY);
+ });
+
+ function launchBall(x, y) {
+ const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
+ const vx = LAUNCH_VELOCITY * Math.sin(rad);
+ const vy = -LAUNCH_VELOCITY * Math.cos(rad);
+
+ balls = [{
+ x: x,
+ y: y,
+ vx: vx,
+ vy: vy,
+ radius: 10,
+ trail: []
+ }];
+ }
+
+ function resetSimulation() {
+ balls = [];
+ }
+
+ function updatePhysics() {
+ for (let i = balls.length - 1; i >= 0; i--) {
+ const b = balls[i];
+
+ const margin = 500;
+ if (b.x < -margin || b.x > canvas.width + margin || 
+ b.y < -margin || b.y > canvas.height + margin) {
+ balls.splice(i, 1);
+ continue;
+ }
+
+ const dx = centralNode.x - b.x;
+ const dy = centralNode.y - b.y;
+ const distSq = dx * dx + dy * dy;
+ const dist = Math.sqrt(distSq);
+
+ if (dist < centralNode.radius + b.radius) {
+ balls.splice(i, 1);
+ continue;
+ }
+
+ const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
+
+ const ax = acceleration * (dx / dist);
+ const ay = acceleration * (dy / dist);
+
+ b.vx += ax;
+ b.vy += ay;
+ b.x += b.vx;
+ b.y += b.vy;
+
+ b.trail.push({ x: b.x, y: b.y });
+ if (b.trail.length > TRAIL_LENGTH) {
+ b.trail.shift();
+ }
+ }
+ }
+
+ function drawEarth(x, y, radius) {
+ ctx.save();
+ ctx.translate(x, y);
+
+ // 1. Atmosphere Glow
+ ctx.beginPath();
+ ctx.arc(0, 0, radius + 2.5, 0, Math.PI * 2);
+ ctx.fillStyle = 'rgba(100, 200, 255, 0.35)';
+ ctx.fill();
+
+ // 2. Ocean
+ ctx.beginPath();
+ ctx.arc(0, 0, radius, 0, Math.PI * 2);
+ ctx.fillStyle = '#1c75bc';
+ ctx.fill();
+
+ ctx.clip();
+
+ // 3. Continents
+ ctx.fillStyle = '#38b000';
+ ctx.beginPath();
+ ctx.arc(-radius * 0.3, -radius * 0.3, radius * 0.5, 0, Math.PI * 2);
+ ctx.fill();
+
+ ctx.beginPath();
+ ctx.arc(radius * 0.35, -radius * 0.1, radius * 0.45, 0, Math.PI * 2);
+ ctx.fill();
+
+ ctx.beginPath();
+ ctx.arc(-radius * 0.1, radius * 0.45, radius * 0.5, 0, Math.PI * 2);
+ ctx.fill();
+
+ // 4. Ice Caps
+ ctx.fillStyle = '#ffffff';
+ ctx.beginPath();
+ ctx.arc(0, -radius * 0.85, radius * 0.5, 0, Math.PI * 2);
+ ctx.fill();
+
+ ctx.beginPath();
+ ctx.arc(0, radius * 0.85, radius * 0.4, 0, Math.PI * 2);
+ ctx.fill();
+
+ // 5. Clouds
+ ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+ ctx.lineWidth = radius * 0.22;
+ ctx.lineCap = 'round';
+ ctx.beginPath();
+ ctx.arc(0, 0, radius * 0.55, -Math.PI * 0.3, Math.PI * 0.3);
+ ctx.stroke();
+
+ // 6. 3D Shading
+ const shadeGrad = ctx.createRadialGradient(
+ -radius * 0.3, -radius * 0.3, radius * 0.1,
+ 0, 0, radius
+ );
+ shadeGrad.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
+ shadeGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0)');
+ shadeGrad.addColorStop(1, 'rgba(0, 0, 0, 0.55)');
+
+ ctx.fillStyle = shadeGrad;
+ ctx.beginPath();
+ ctx.arc(0, 0, radius, 0, Math.PI * 2);
+ ctx.fill();
+
+ ctx.restore();
+ }
+
+ function draw() {
+ // 1. Draw Pre-rendered Space Background
+ ctx.drawImage(bgCanvas, 0, 0);
+
+ // 2. Draw Central Mass Node (Glowing Sun)
+ ctx.save();
+ const sunGlow = ctx.createRadialGradient(
+ centralNode.x, centralNode.y, centralNode.radius * 0.5,
+ centralNode.x, centralNode.y, centralNode.radius * 2.5
+ );
+ sunGlow.addColorStop(0, 'rgba(255, 255, 255, 1)');
+ sunGlow.addColorStop(0.4, 'rgba(255, 200, 100, 0.6)');
+ sunGlow.addColorStop(1, 'rgba(255, 150, 0, 0)');
+
+ ctx.beginPath();
+ ctx.arc(centralNode.x, centralNode.y, centralNode.radius * 2.5, 0, Math.PI * 2);
+ ctx.fillStyle = sunGlow;
+ ctx.fill();
+
+ ctx.beginPath();
+ ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
+ ctx.fillStyle = '#ffffff';
+ ctx.fill();
+
+ ctx.beginPath();
+ ctx.arc(centralNode.x, centralNode.y, 2, 0, Math.PI * 2);
+ ctx.fillStyle = '#000000';
+ ctx.fill();
+ ctx.restore();
+
+ // 3. Draw Orbit Trail & Earth Planet
+ for (const b of balls) {
+ if (b.trail.length > 1) {
+ ctx.beginPath();
+ ctx.moveTo(b.trail[0].x, b.trail[0].y);
+ for (let t = 1; t < b.trail.length; t++) {
+ ctx.lineTo(b.trail[t].x, b.trail[t].y);
+ }
+ ctx.strokeStyle = 'rgba(120, 200, 255, 0.7)';
+ ctx.lineWidth = 1.5;
+ ctx.stroke();
+ }
+
+ drawEarth(b.x, b.y, b.radius);
+ }
+ }
+
+ function animate() {
+ updatePhysics();
+ draw();
+ requestAnimationFrame(animate);
+ }
+
+ window.onload = function() {
+ animate();
+ };
+ </script>
 </body>
 </html>
