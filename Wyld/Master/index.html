@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gravity Physics Baseline - Multi-Ball Launch</title>
+  <title>Gravity Physics - 360° Launch & Bouncy Walls</title>
   <style>
     * {
       box-sizing: border-box;
@@ -44,12 +44,17 @@
       font-weight: bold;
     }
 
-    .btn-reset {
+    .header-controls {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn-action {
       background: transparent;
       color: #ffffff;
       border: 1px solid #ffffff;
-      padding: 6px 16px;
-      font-size: 14px;
+      padding: 6px 14px;
+      font-size: 13px;
       font-weight: bold;
       cursor: pointer;
       text-transform: uppercase;
@@ -57,7 +62,7 @@
       transition: all 0.15s ease-in-out;
     }
 
-    .btn-reset:hover {
+    .btn-action:hover, .btn-action.active {
       background: #ffffff;
       color: #000000;
     }
@@ -95,7 +100,10 @@
   <!-- Header Section -->
   <div id="header">
     <h1>Gravity Simulation</h1>
-    <button class="btn-reset" onclick="resetSimulation()">Reset</button>
+    <div class="header-controls">
+      <button id="wallsToggleBtn" class="btn-action" onclick="toggleBouncyWalls()">Walls: OFF</button>
+      <button class="btn-action" onclick="resetSimulation()">Reset</button>
+    </div>
   </div>
 
   <!-- Canvas Container -->
@@ -104,7 +112,7 @@
   </div>
 
   <div class="instructions">
-    Click anywhere on the canvas to launch 10 balls spaced 10° apart.
+    Click anywhere on the canvas to launch 10 balls radiating in 360°.
   </div>
 
   <script>
@@ -114,13 +122,14 @@
     // SIMULATION CONSTANTS
     const GRAVITY_CONSTANT = 1800; // Strength of gravitational pull (G)
     const LAUNCH_VELOCITY = 5; // Fixed launch velocity
-    const BALL_COUNT = 10; // Number of balls to launch on click
-    const ANGLE_SPACING = 10; // Degrees apart for each launched ball
-    const TRAIL_LENGTH = 300; // Number of historic trail points stored
-    const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
+    const BALL_COUNT = 10; // Number of balls launched per click
+    const ANGLE_STEP = 360 / BALL_COUNT; // Equal spacing across 360 degrees (36°)
+    const TRAIL_LENGTH = 300; // Historic trail points stored per ball
+    const SOFTENING_FACTOR = 400; // Prevents extreme velocity near center
 
     // STATE VARIABLES
     let balls = [];
+    let bouncyWallsEnabled = false;
 
     // Central Gravity Node Definition
     const centralNode = {
@@ -142,7 +151,15 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    // Canvas Click Handler: Directly launch 10 balls at click position
+    // Toggle Bouncy Walls state & UI button
+    function toggleBouncyWalls() {
+      bouncyWallsEnabled = !bouncyWallsEnabled;
+      const btn = document.getElementById('wallsToggleBtn');
+      btn.textContent = `Walls: ${bouncyWallsEnabled ? 'ON' : 'OFF'}`;
+      btn.classList.toggle('active', bouncyWallsEnabled);
+    }
+
+    // Canvas Click Handler: Radiate 10 balls across 360 degrees
     canvas.addEventListener('click', (e) => {
       const rect = canvas.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
@@ -152,15 +169,15 @@
     });
 
     function launchBalls(x, y) {
-      // Overwrite existing array to maintain smooth performance on Chromebooks
+      // Overwrite existing array to maintain high FPS on Chromebooks
       balls = [];
 
       for (let i = 0; i < BALL_COUNT; i++) {
-        // Calculate angle spaced 10 degrees apart (0°, 10°, 20°, ..., 90°)
-        const angleDegrees = i * ANGLE_SPACING;
+        // Evenly space 10 balls across 360 degrees (0°, 36°, 72°, ..., 324°)
+        const angleDegrees = i * ANGLE_STEP;
         const rad = (angleDegrees * Math.PI) / 180;
         
-        // Velocity vector components (0° = UP, 90° = RIGHT)
+        // Velocity vector components (0° = UP, 90° = RIGHT, 180° = DOWN, 270° = LEFT)
         const vx = LAUNCH_VELOCITY * Math.sin(rad);
         const vy = -LAUNCH_VELOCITY * Math.cos(rad);
 
@@ -183,15 +200,39 @@
       for (let i = balls.length - 1; i >= 0; i--) {
         const b = balls[i];
 
-        // Remove ball if it travels too far off-screen (prevents memory leak)
-        const margin = 500;
-        if (b.x < -margin || b.x > canvas.width + margin || 
-            b.y < -margin || b.y > canvas.height + margin) {
-          balls.splice(i, 1);
-          continue;
+        // 1. Wall Bouncing or Off-screen Cleanup
+        if (bouncyWallsEnabled) {
+          // Left Wall
+          if (b.x - b.radius < 0) {
+            b.x = b.radius;
+            b.vx = -b.vx;
+          }
+          // Right Wall
+          if (b.x + b.radius > canvas.width) {
+            b.x = canvas.width - b.radius;
+            b.vx = -b.vx;
+          }
+          // Top Wall
+          if (b.y - b.radius < 0) {
+            b.y = b.radius;
+            b.vy = -b.vy;
+          }
+          // Bottom Wall
+          if (b.y + b.radius > canvas.height) {
+            b.y = canvas.height - b.radius;
+            b.vy = -b.vy;
+          }
+        } else {
+          // Remove ball if it travels too far off-screen (prevents memory leak)
+          const margin = 500;
+          if (b.x < -margin || b.x > canvas.width + margin || 
+              b.y < -margin || b.y > canvas.height + margin) {
+            balls.splice(i, 1);
+            continue;
+          }
         }
 
-        // Distance vector to central gravity node
+        // 2. Distance vector to central gravity node
         const dx = centralNode.x - b.x;
         const dy = centralNode.y - b.y;
         const distSq = dx * dx + dy * dy;
