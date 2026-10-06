@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gravity Physics Baseline</title>
+    <title>Gravity Physics Simulation</title>
     <style>
         * {
             box-sizing: border-box;
@@ -44,7 +44,12 @@
             font-weight: bold;
         }
 
-        .btn-reset {
+        .header-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
             background: transparent;
             color: #ffffff;
             border: 1px solid #ffffff;
@@ -57,7 +62,12 @@
             transition: all 0.15s ease-in-out;
         }
 
-        .btn-reset:hover {
+        .btn:hover {
+            background: #ffffff;
+            color: #000000;
+        }
+
+        .btn.active {
             background: #ffffff;
             color: #000000;
         }
@@ -80,6 +90,7 @@
             cursor: crosshair;
             width: 100%;
             height: 100%;
+            touch-action: none; /* Prevents touchscreen scrolling gesture conflicts on Chromebooks */
         }
 
         .instructions {
@@ -95,7 +106,10 @@
     <!-- Header Section -->
     <div id="header">
         <h1>Gravity Simulation</h1>
-        <button class="btn-reset" onclick="resetSimulation()">Reset</button>
+        <div class="header-controls">
+            <button id="bouncyBtn" class="btn" onclick="toggleBouncyWalls()">Bouncy Walls: OFF</button>
+            <button class="btn" onclick="resetSimulation()">Reset</button>
+        </div>
     </div>
 
     <!-- Canvas Container -->
@@ -104,7 +118,7 @@
     </div>
 
     <div class="instructions">
-        Click anywhere on the canvas to launch a ball.
+        Click & drag to pull back like a slingshot to launch a ball (1s cooldown between launches).
     </div>
 
     <script>
@@ -113,13 +127,24 @@
 
         // SIMULATION CONSTANTS
         const GRAVITY_CONSTANT = 1800;    // Strength of gravitational pull (G)
-        const LAUNCH_VELOCITY = 5;         // Fixed velocity on click
-        const FIXED_LAUNCH_ANGLE = 90;     // Fixed direction in degrees (90° = straight right)
         const TRAIL_LENGTH = 300;         // Number of historic trail points stored
         const SOFTENING_FACTOR = 400;     // Prevents infinite velocity near center
+        const SPAM_COOLDOWN_MS = 1000;    // 1-second spam-click limit between launches
+        const MAX_DRAG_DIST = 200;        // Maximum pull-back distance for slingshot
+        const SPEED_SCALE = 0.12;         // Slingshot pull distance to velocity multiplier
+        const MAX_LAUNCH_SPEED = 22;      // Cap on launch velocity
 
         // STATE VARIABLES
         let balls = [];
+        let bouncyWalls = false;
+        let lastLaunchTime = 0;
+
+        // Slingshot drag state
+        let isDragging = false;
+        let dragStart = { x: 0, y: 0 };
+        let dragCurrent = { x: 0, y: 0 };
+        let cooldownMessage = '';
+        let cooldownTimeout = null;
 
         // Central Gravity Node Definition
         const centralNode = {
@@ -141,22 +166,98 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // Canvas Click Handler: Directly launch ball at click position
-        canvas.addEventListener('click', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const clickY = e.clientY - rect.top;
+        function toggleBouncyWalls() {
+            bouncyWalls = !bouncyWalls;
+            const btn = document.getElementById('bouncyBtn');
+            btn.textContent = `Bouncy Walls: ${bouncyWalls ? 'ON' : 'OFF'}`;
+            btn.classList.toggle('active', bouncyWalls);
+        }
 
-            launchBall(clickX, clickY);
+        function getCanvasCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: (e.clientX - rect.left) * (canvas.width / rect.width),
+                y: (e.clientY - rect.top) * (canvas.height / rect.height)
+            };
+        }
+
+        // Pointer event listeners (supports mouse, trackpad, and Chromebook touchscreens)
+        canvas.addEventListener('pointerdown', (e) => {
+            const now = Date.now();
+            if (now - lastLaunchTime < SPAM_COOLDOWN_MS) {
+                showCooldownNotice();
+                return;
+            }
+
+            const pos = getCanvasCoords(e);
+            isDragging = true;
+            dragStart = { x: pos.x, y: pos.y };
+            dragCurrent = { x: pos.x, y: pos.y };
+
+            canvas.setPointerCapture(e.pointerId);
         });
 
-        function launchBall(x, y) {
-            // Fixed launch direction: 90° (0° = UP, 90° = RIGHT, 180° = DOWN, 270° = LEFT)
-            const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
-            const vx = LAUNCH_VELOCITY * Math.sin(rad);  // sin(90°) = 1  -> vx = 5
-            const vy = -LAUNCH_VELOCITY * Math.cos(rad); // cos(90°) = 0  -> vy = 0
+        canvas.addEventListener('pointermove', (e) => {
+            if (!isDragging) return;
+            const pos = getCanvasCoords(e);
+            dragCurrent = { x: pos.x, y: pos.y };
+        });
 
-            // Overwrite existing array to strictly maintain a single ball on screen
+        canvas.addEventListener('pointerup', (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            try {
+                canvas.releasePointerCapture(e.pointerId);
+            } catch (err) {}
+
+            const now = Date.now();
+            if (now - lastLaunchTime < SPAM_COOLDOWN_MS) return;
+
+            // Calculate pullback vector (Slingshot logic)
+            let pullX = dragStart.x - dragCurrent.x;
+            let pullY = dragStart.y - dragCurrent.y;
+            let dist = Math.hypot(pullX, pullY);
+
+            // Cap drag length
+            if (dist > MAX_DRAG_DIST) {
+                pullX = (pullX / dist) * MAX_DRAG_DIST;
+                pullY = (pullY / dist) * MAX_DRAG_DIST;
+                dist = MAX_DRAG_DIST;
+            }
+
+            // Quick single click default launch speed
+            let vx = pullX * SPEED_SCALE;
+            let vy = pullY * SPEED_SCALE;
+            if (dist < 5) {
+                vx = 5;
+                vy = 0;
+            }
+
+            // Cap launch velocity
+            const speed = Math.hypot(vx, vy);
+            if (speed > MAX_LAUNCH_SPEED) {
+                vx = (vx / speed) * MAX_LAUNCH_SPEED;
+                vy = (vy / speed) * MAX_LAUNCH_SPEED;
+            }
+
+            launchBall(dragStart.x, dragStart.y, vx, vy);
+            lastLaunchTime = Date.now();
+        });
+
+        canvas.addEventListener('pointercancel', () => {
+            isDragging = false;
+        });
+
+        function showCooldownNotice() {
+            cooldownMessage = 'PLEASE WAIT 1 SECOND BETWEEN LAUNCHES';
+            if (cooldownTimeout) clearTimeout(cooldownTimeout);
+            cooldownTimeout = setTimeout(() => {
+                cooldownMessage = '';
+            }, 1000);
+        }
+
+        function launchBall(x, y, vx, vy) {
+            // Overwrite existing array to maintain a single ball on screen
             balls = [{
                 x: x,
                 y: y,
@@ -175,12 +276,31 @@
             for (let i = balls.length - 1; i >= 0; i--) {
                 const b = balls[i];
 
-                // Remove ball if it travels too far off-screen (prevents memory leak)
-                const margin = 500;
-                if (b.x < -margin || b.x > canvas.width + margin || 
-                    b.y < -margin || b.y > canvas.height + margin) {
-                    balls.splice(i, 1);
-                    continue;
+                if (bouncyWalls) {
+                    const RESTITUTION = 0.9; // Bouncy wall velocity retention factor
+                    if (b.x - b.radius < 0) {
+                        b.x = b.radius;
+                        b.vx = -b.vx * RESTITUTION;
+                    } else if (b.x + b.radius > canvas.width) {
+                        b.x = canvas.width - b.radius;
+                        b.vx = -b.vx * RESTITUTION;
+                    }
+
+                    if (b.y - b.radius < 0) {
+                        b.y = b.radius;
+                        b.vy = -b.vy * RESTITUTION;
+                    } else if (b.y + b.radius > canvas.height) {
+                        b.y = canvas.height - b.radius;
+                        b.vy = -b.vy * RESTITUTION;
+                    }
+                } else {
+                    // Standard off-screen removal if bouncy walls are off
+                    const margin = 500;
+                    if (b.x < -margin || b.x > canvas.width + margin || 
+                        b.y < -margin || b.y > canvas.height + margin) {
+                        balls.splice(i, 1);
+                        continue;
+                    }
                 }
 
                 // Distance vector to central gravity node
@@ -214,6 +334,56 @@
                     b.trail.shift();
                 }
             }
+        }
+
+        function drawSlingshot() {
+            if (!isDragging) return;
+
+            let pullX = dragStart.x - dragCurrent.x;
+            let pullY = dragStart.y - dragCurrent.y;
+            let dist = Math.hypot(pullX, pullY);
+
+            let clampedX = dragCurrent.x;
+            let clampedY = dragCurrent.y;
+
+            if (dist > MAX_DRAG_DIST) {
+                clampedX = dragStart.x - (pullX / dist) * MAX_DRAG_DIST;
+                clampedY = dragStart.y - (pullY / dist) * MAX_DRAG_DIST;
+            }
+
+            // Rubber band drag line
+            ctx.beginPath();
+            ctx.moveTo(dragStart.x, dragStart.y);
+            ctx.lineTo(clampedX, clampedY);
+            ctx.strokeStyle = '#888888';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 4]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Trajectory direction vector line
+            const launchX = dragStart.x + pullX;
+            const launchY = dragStart.y + pullY;
+
+            ctx.beginPath();
+            ctx.moveTo(dragStart.x, dragStart.y);
+            ctx.lineTo(launchX, launchY);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Ball spawn point indicator
+            ctx.beginPath();
+            ctx.arc(dragStart.x, dragStart.y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+
+            // Drag handle endpoint ring
+            ctx.beginPath();
+            ctx.arc(clampedX, clampedY, 4, 0, Math.PI * 2);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
         }
 
         function draw() {
@@ -252,6 +422,17 @@
                 ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
                 ctx.fillStyle = '#ffffff';
                 ctx.fill();
+            }
+
+            // 3. Draw Slingshot Visual Aiming Overlay
+            drawSlingshot();
+
+            // 4. Draw Spam-click Cooldown Banner
+            if (cooldownMessage) {
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '12px "Courier New", Courier, monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText(cooldownMessage, canvas.width / 2, 30);
             }
         }
 

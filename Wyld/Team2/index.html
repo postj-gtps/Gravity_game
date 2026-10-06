@@ -1,362 +1,484 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
- <meta charset="UTF-8">
- <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <title>Gravity Physics Baseline</title>
- <style>
- * {
- box-sizing: border-box;
- user-select: none;
- margin: 0;
- padding: 0;
- font-family: 'Courier New', Courier, monospace, sans-serif;
- }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gravity Physics - Red & Black Tie-Dye</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      margin: 0;
+      padding: 0;
+      font-family: 'Courier New', Courier, monospace, sans-serif;
+    }
 
- body {
- background-color: #000000;
- color: #ffffff;
- display: flex;
- flex-direction: column;
- align-items: center;
- justify-content: flex-start;
- height: 100vh;
- overflow: hidden;
- padding: 16px;
- }
+    body {
+      background: radial-gradient(circle at center, #800000 0%, #300000 45%, #000000 90%);
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      height: 100vh;
+      overflow: hidden;
+      padding: 16px;
+    }
 
- /* Top Header Bar */
- #header {
- display: flex;
- justify-content: space-between;
- align-items: center;
- width: 100%;
- max-width: 1100px;
- margin-bottom: 12px;
- padding-bottom: 8px;
- border-bottom: 1px solid #ffffff;
- }
+    /* Top Header Bar */
+    #header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      max-width: 1100px;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #ff3333;
+    }
 
- h1 {
- font-size: 18px;
- letter-spacing: 2px;
- text-transform: uppercase;
- font-weight: bold;
- }
+    h1 {
+      font-size: 18px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-weight: bold;
+      color: #ff4d4d;
+      text-shadow: 0 0 8px rgba(255, 0, 0, 0.6);
+    }
 
- .btn-reset {
- background: transparent;
- color: #ffffff;
- border: 1px solid #ffffff;
- padding: 6px 16px;
- font-size: 14px;
- font-weight: bold;
- cursor: pointer;
- text-transform: uppercase;
- letter-spacing: 1px;
- transition: all 0.15s ease-in-out;
- }
+    .controls {
+      display: flex;
+      gap: 10px;
+    }
 
- .btn-reset:hover {
- background: #ffffff;
- color: #000000;
- }
+    .btn-control {
+      background: rgba(0, 0, 0, 0.7);
+      color: #ffffff;
+      border: 1px solid #ff3333;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: bold;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-radius: 4px;
+      transition: all 0.15s ease-in-out;
+      box-shadow: 0 0 5px rgba(255, 0, 0, 0.3);
+    }
 
- /* Main Canvas Container */
- #canvas-wrapper {
- position: relative;
- width: 100%;
- max-width: 1100px;
- flex-grow: 1;
- display: flex;
- justify-content: center;
- align-items: center;
- }
+    .btn-control:hover {
+      background: #ff3333;
+      color: #000000;
+      box-shadow: 0 0 10px rgba(255, 51, 51, 0.8);
+    }
 
- canvas {
- background-color: #000000;
- border: 1px solid #ffffff;
- display: block;
- cursor: crosshair;
- width: 100%;
- height: 100%;
- touch-action: none; /* Prevents touch scrolling on Chromebook touchscreens */
- }
+    .btn-control.active {
+      border-color: #00ff66;
+      box-shadow: 0 0 8px rgba(0, 255, 102, 0.6);
+      color: #00ff66;
+    }
 
- .instructions {
- margin-top: 8px;
- font-size: 11px;
- color: #888888;
- text-align: center;
- }
- </style>
+    /* Main Canvas Container */
+    #canvas-wrapper {
+      position: relative;
+      width: 100%;
+      max-width: 1100px;
+      flex-grow: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    canvas {
+      border: 2px solid #ff3333;
+      border-radius: 6px;
+      display: block;
+      cursor: crosshair;
+      width: 100%;
+      height: 100%;
+      touch-action: none; /* Prevents touchscreen scrolling on Chromebooks */
+      box-shadow: 0 0 20px rgba(180, 0, 0, 0.5);
+    }
+
+    .instructions {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #ff9999;
+      text-align: center;
+      font-weight: bold;
+    }
+  </style>
 </head>
 <body>
 
- <!-- Header Section -->
- <div id="header">
- <h1>Gravity Simulation</h1>
- <button class="btn-reset" onclick="resetSimulation()">Reset</button>
- </div>
+  <!-- Header Section -->
+  <div id="header">
+    <h1>Gravity Simulation</h1>
+    <div class="controls">
+      <button id="wall-toggle" class="btn-control active" onclick="toggleBouncyWalls()">Bouncy Walls: ON</button>
+      <button class="btn-control" onclick="resetSimulation()">Reset</button>
+    </div>
+  </div>
 
- <!-- Canvas Container -->
- <div id="canvas-wrapper">
- <canvas id="simCanvas"></canvas>
- </div>
+  <!-- Canvas Container -->
+  <div id="canvas-wrapper">
+    <canvas id="simCanvas"></canvas>
+  </div>
 
- <div class="instructions">
- Click or tap anywhere on the canvas to launch a ball.
- </div>
+  <div class="instructions">
+    Tap or click anywhere to launch a colourful ball!
+  </div>
 
- <script>
- const canvas = document.getElementById('simCanvas');
- const ctx = canvas.getContext('2d');
+  <script>
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
 
- // SIMULATION CONSTANTS
- const GRAVITY_CONSTANT = 1800; // Strength of gravitational pull (G)
- const LAUNCH_VELOCITY = 5; // Fixed velocity on click
- const FIXED_LAUNCH_ANGLE = 90; // Fixed direction in degrees (90° = straight right)
- const TRAIL_LENGTH = 300; // Number of historic trail points stored
- const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
- const RESTITUTION = 0.85; // Energy retained after wall bounce (0.85 = 85%)
+    // SIMULATION CONSTANTS
+    const GRAVITY_CONSTANT = 1800; // Strength of gravitational pull
+    const LAUNCH_VELOCITY = 5; // Initial launch speed
+    const FIXED_LAUNCH_ANGLE = 90; // Fixed direction (90° = straight right)
+    const TRAIL_LENGTH = 300; // Trail points stored
+    const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
+    const RESTITUTION = 0.85; // Energy retained after wall bounce
 
- // STATE VARIABLES
- let balls = [];
+    // STATE VARIABLES
+    let balls = [];
+    let bouncyWalls = true;
+    let tieDyePattern = null;
 
- // Central Gravity Node Definition
- const centralNode = {
- x: 0,
- y: 0,
- radius: 12
- };
+    // Central Gravity Node Definition
+    const centralNode = {
+      x: 0,
+      y: 0,
+      radius: 14
+    };
 
- function resizeCanvas() {
- const wrapper = document.getElementById('canvas-wrapper');
- canvas.width = wrapper.clientWidth;
- canvas.height = wrapper.clientHeight;
- 
- // Recenter gravity node dynamically
- centralNode.x = canvas.width / 2;
- centralNode.y = canvas.height / 2;
- }
+    function toggleBouncyWalls() {
+      bouncyWalls = !bouncyWalls;
+      const btn = document.getElementById('wall-toggle');
+      btn.innerText = `Bouncy Walls: ${bouncyWalls ? 'ON' : 'OFF'}`;
+      if (bouncyWalls) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    }
 
- window.addEventListener('resize', resizeCanvas);
- resizeCanvas();
+    // Procedural Red and Black Tie-Dye Canvas Background
+    function createTieDyePattern() {
+      const bgCanvas = document.createElement('canvas');
+      bgCanvas.width = canvas.width;
+      bgCanvas.height = canvas.height;
+      const bgCtx = bgCanvas.getContext('2d');
 
- // Universal Click / Touch Handler for Launching
- function handleLaunch(e) {
- const rect = canvas.getBoundingClientRect();
- const clickX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
- const clickY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+      const cx = bgCanvas.width / 2;
+      const cy = bgCanvas.height / 2;
+      const maxRadius = Math.sqrt(cx * cx + cy * cy);
 
- launchBall(clickX, clickY);
- }
+      // Base black fill
+      bgCtx.fillStyle = '#050000';
+      bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
 
- canvas.addEventListener('click', handleLaunch);
+      // Organic tie-dye swirls with varying crimson & black rings
+      const ringCount = 18;
+      for (let i = ringCount; i > 0; i--) {
+        const r = (maxRadius / ringCount) * i;
+        const grad = bgCtx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r);
+        
+        const isRed = i % 2 === 0;
+        const redHue = 340 + (i * 7) % 30; // Deep crimson to bright red
+        const lightness = isRed ? (22 + (i % 5) * 7) : (2 + (i % 3) * 3);
 
- function launchBall(x, y) {
- // Fixed launch direction: 90° (0° = UP, 90° = RIGHT, 180° = DOWN, 270° = LEFT)
- const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
- const vx = LAUNCH_VELOCITY * Math.sin(rad); 
- const vy = -LAUNCH_VELOCITY * Math.cos(rad); 
+        grad.addColorStop(0, `hsl(${redHue}, 100%, ${lightness}%)`);
+        grad.addColorStop(0.5, `hsl(${redHue - 10}, 90%, ${Math.max(0, lightness - 10)}%)`);
+        grad.addColorStop(1, '#000000');
 
- // Overwrite existing array to strictly maintain a single ball on screen
- balls = [{
- x: x,
- y: y,
- vx: vx,
- vy: vy,
- radius: 12, // Ball radius
- angle: 0, // Dynamic rotation angle in radians
- trail: [] // Stores history of past {x, y} coordinates
- }];
- }
+        bgCtx.save();
+        bgCtx.translate(cx, cy);
+        bgCtx.rotate((i * 0.35)); // Organic spiral rotation offset
+        bgCtx.scale(1 + (i % 3) * 0.15, 1 - (i % 2) * 0.1); // Distort circle into tie-dye fluid shape
+        bgCtx.beginPath();
+        bgCtx.arc(0, 0, r, 0, Math.PI * 2);
+        bgCtx.fillStyle = grad;
+        bgCtx.globalAlpha = 0.75;
+        bgCtx.fill();
+        bgCtx.restore();
+      }
 
- function resetSimulation() {
- balls = [];
- }
+      // Layered subtle spiral splash highlights
+      bgCtx.save();
+      bgCtx.globalCompositeOperation = 'screen';
+      for (let a = 0; a < Math.PI * 4; a += 0.25) {
+        const sr = (a / (Math.PI * 4)) * maxRadius;
+        const sx = cx + Math.cos(a * 2.5) * sr;
+        const sy = cy + Math.sin(a * 2.5) * sr;
+        const radG = bgCtx.createRadialGradient(sx, sy, 0, sx, sy, 70);
+        radG.addColorStop(0, 'rgba(230, 0, 38, 0.35)');
+        radG.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        bgCtx.fillStyle = radG;
+        bgCtx.beginPath();
+        bgCtx.arc(sx, sy, 70, 0, Math.PI * 2);
+        bgCtx.fill();
+      }
+      bgCtx.restore();
 
- function updatePhysics() {
- for (let i = balls.length - 1; i >= 0; i--) {
- const b = balls[i];
+      tieDyePattern = bgCanvas;
+    }
 
- // Distance vector to central gravity node
- const dx = centralNode.x - b.x;
- const dy = centralNode.y - b.y;
- const distSq = dx * dx + dy * dy;
- const dist = Math.sqrt(distSq);
+    function resizeCanvas() {
+      const wrapper = document.getElementById('canvas-wrapper');
+      canvas.width = wrapper.clientWidth;
+      canvas.height = wrapper.clientHeight;
+      
+      centralNode.x = canvas.width / 2;
+      centralNode.y = canvas.height / 2;
 
- // Absorption check: ball collides with central mass
- if (dist < centralNode.radius + b.radius) {
- balls.splice(i, 1);
- continue;
- }
+      createTieDyePattern();
+    }
 
- // Inverse square law gravity acceleration
- const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
+    window.addEventListener('resize', resizeCanvas);
 
- // Acceleration vector components
- const ax = acceleration * (dx / dist);
- const ay = acceleration * (dy / dist);
+    // Color Generator for Random Balls & Trails
+    function getRandomColor() {
+      const hue = Math.floor(Math.random() * 360);
+      return {
+        main: `hsl(${hue}, 100%, 60%)`,
+        accent: `hsl(${(hue + 180) % 360}, 90%, 25%)`,
+        trail: `hsl(${hue}, 100%, 65%)`
+      };
+    }
 
- // Update velocity and position
- b.vx += ax;
- b.vy += ay;
- b.x += b.vx;
- b.y += b.vy;
+    // Launch Handler for Touch & Mouse
+    function handleLaunch(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clickX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+      const clickY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
 
- // WALL BOUNCE PHYSICS
- // Left & Right Wall Collisions
- if (b.x - b.radius < 0) {
- b.x = b.radius;
- b.vx = -b.vx * RESTITUTION;
- } else if (b.x + b.radius > canvas.width) {
- b.x = canvas.width - b.radius;
- b.vx = -b.vx * RESTITUTION;
- }
+      launchBall(clickX, clickY);
+    }
 
- // Top & Bottom Wall Collisions
- if (b.y - b.radius < 0) {
- b.y = b.radius;
- b.vy = -b.vy * RESTITUTION;
- } else if (b.y + b.radius > canvas.height) {
- b.y = canvas.height - b.radius;
- b.vy = -b.vy * RESTITUTION;
- }
+    canvas.addEventListener('click', handleLaunch);
 
- // Rotate ball dynamically based on current speed
- const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
- b.angle += speed * 0.04;
+    function launchBall(x, y) {
+      const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
+      const vx = LAUNCH_VELOCITY * Math.sin(rad); 
+      const vy = -LAUNCH_VELOCITY * Math.cos(rad); 
 
- // Record position history for path trail
- b.trail.push({ x: b.x, y: b.y });
- if (b.trail.length > TRAIL_LENGTH) {
- b.trail.shift();
- }
- }
- }
+      const colors = getRandomColor();
 
- // Procedural Vector Soccer Ball Drawing Function
- function drawSoccerBall(ctx, x, y, r, angle) {
- ctx.save();
- ctx.translate(x, y);
- ctx.rotate(angle);
+      balls = [{
+        x: x,
+        y: y,
+        vx: vx,
+        vy: vy,
+        radius: 12,
+        angle: 0,
+        colors: colors,
+        trail: []
+      }];
+    }
 
- // 1. Base white sphere
- ctx.beginPath();
- ctx.arc(0, 0, r, 0, Math.PI * 2);
- ctx.fillStyle = '#ffffff';
- ctx.fill();
- ctx.lineWidth = Math.max(1, r * 0.1);
- ctx.strokeStyle = '#000000';
- ctx.stroke();
+    function resetSimulation() {
+      balls = [];
+    }
 
- // Clip panel patterns strictly within the ball boundary
- ctx.beginPath();
- ctx.arc(0, 0, r, 0, Math.PI * 2);
- ctx.clip();
+    function updatePhysics() {
+      for (let i = balls.length - 1; i >= 0; i--) {
+        const b = balls[i];
 
- const innerR = r * 0.38;
- const lineR = r * 0.72;
+        // Distance vector to central gravity node
+        const dx = centralNode.x - b.x;
+        const dy = centralNode.y - b.y;
+        const distSq = dx * dx + dy * dy;
+        const dist = Math.sqrt(distSq);
 
- // 2. Central black pentagon
- ctx.beginPath();
- for (let i = 0; i < 5; i++) {
- const a = (i * 2 * Math.PI) / 5 - Math.PI / 2;
- const px = innerR * Math.cos(a);
- const py = innerR * Math.sin(a);
- if (i === 0) ctx.moveTo(px, py);
- else ctx.lineTo(px, py);
- }
- ctx.closePath();
- ctx.fillStyle = '#000000';
- ctx.fill();
+        // Absorption check: ball collides with central mass
+        if (dist < centralNode.radius + b.radius) {
+          balls.splice(i, 1);
+          continue;
+        }
 
- // 3. Radial seam lines and surrounding edge pentagon patches
- for (let i = 0; i < 5; i++) {
- const a1 = (i * 2 * Math.PI) / 5 - Math.PI / 2;
- const a2 = ((i + 1) * 2 * Math.PI) / 5 - Math.PI / 2;
+        // Inverse square law gravity acceleration
+        const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
+        const ax = acceleration * (dx / dist);
+        const ay = acceleration * (dy / dist);
 
- const p1x = innerR * Math.cos(a1);
- const p1y = innerR * Math.sin(a1);
- const s1x = lineR * Math.cos(a1);
- const s1y = lineR * Math.sin(a1);
- const s2x = lineR * Math.cos(a2);
- const s2y = lineR * Math.sin(a2);
+        // Update velocity and position
+        b.vx += ax;
+        b.vy += ay;
+        b.x += b.vx;
+        b.y += b.vy;
 
- // Seam line extending outward from central pentagon vertex
- ctx.beginPath();
- ctx.moveTo(p1x, p1y);
- ctx.lineTo(s1x, s1y);
- ctx.strokeStyle = '#000000';
- ctx.lineWidth = Math.max(1, r * 0.08);
- ctx.stroke();
+        // WALL BOUNCE PHYSICS TOGGLE
+        if (bouncyWalls) {
+          // Left & Right Wall Collisions
+          if (b.x - b.radius < 0) {
+            b.x = b.radius;
+            b.vx = -b.vx * RESTITUTION;
+          } else if (b.x + b.radius > canvas.width) {
+            b.x = canvas.width - b.radius;
+            b.vx = -b.vx * RESTITUTION;
+          }
 
- // Outer black patch
- const edge1X = r * 1.2 * Math.cos(a1 + 0.25);
- const edge1Y = r * 1.2 * Math.sin(a1 + 0.25);
- const edge2X = r * 1.2 * Math.cos(a2 - 0.25);
- const edge2Y = r * 1.2 * Math.sin(a2 - 0.25);
+          // Top & Bottom Wall Collisions
+          if (b.y - b.radius < 0) {
+            b.y = b.radius;
+            b.vy = -b.vy * RESTITUTION;
+          } else if (b.y + b.radius > canvas.height) {
+            b.y = canvas.height - b.radius;
+            b.vy = -b.vy * RESTITUTION;
+          }
+        } else {
+          // Bouncy Walls OFF: Clean up ball when it flies far off screen
+          const margin = 400;
+          if (b.x < -margin || b.x > canvas.width + margin || 
+              b.y < -margin || b.y > canvas.height + margin) {
+            balls.splice(i, 1);
+            continue;
+          }
+        }
 
- ctx.beginPath();
- ctx.moveTo(s1x, s1y);
- ctx.lineTo(edge1X, edge1Y);
- ctx.lineTo(edge2X, edge2Y);
- ctx.lineTo(s2x, s2y);
- ctx.closePath();
- ctx.fillStyle = '#000000';
- ctx.fill();
- ctx.stroke();
- }
+        // Dynamic spin based on movement speed
+        const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+        b.angle += speed * 0.04;
 
- ctx.restore();
- }
+        // Record position history for path trail
+        b.trail.push({ x: b.x, y: b.y });
+        if (b.trail.length > TRAIL_LENGTH) {
+          b.trail.shift();
+        }
+      }
+    }
 
- function draw() {
- // Clear canvas background
- ctx.fillStyle = '#000000';
- ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Procedural Vector Soccer Ball with Dynamic Random Colors
+    function drawSoccerBall(ctx, x, y, r, angle, colors) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
 
- // 1. Draw Central Mass Node
- ctx.beginPath();
- ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
- ctx.fillStyle = '#ffffff';
- ctx.fill();
+      // 1. Base sphere
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fillStyle = colors.main;
+      ctx.fill();
+      ctx.lineWidth = Math.max(1, r * 0.1);
+      ctx.strokeStyle = '#000000';
+      ctx.stroke();
 
- // Center mark on node
- ctx.beginPath();
- ctx.arc(centralNode.x, centralNode.y, 2, 0, Math.PI * 2);
- ctx.fillStyle = '#000000';
- ctx.fill();
+      // Clip panel patterns strictly within the ball boundary
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.clip();
 
- // 2. Draw Ball & Trail
- for (const b of balls) {
- // Draw path line
- if (b.trail.length > 1) {
- ctx.beginPath();
- ctx.moveTo(b.trail[0].x, b.trail[0].y);
- for (let t = 1; t < b.trail.length; t++) {
- ctx.lineTo(b.trail[t].x, b.trail[t].y);
- }
- ctx.strokeStyle = '#ffffff';
- ctx.lineWidth = 1.2;
- ctx.stroke();
- }
+      const innerR = r * 0.38;
+      const lineR = r * 0.72;
 
- // Draw vector soccer ball
- drawSoccerBall(ctx, b.x, b.y, b.radius, b.angle);
- }
- }
+      // 2. Central pentagon patch
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const a = (i * 2 * Math.PI) / 5 - Math.PI / 2;
+        const px = innerR * Math.cos(a);
+        const py = innerR * Math.sin(a);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = colors.accent;
+      ctx.fill();
 
- function animate() {
- updatePhysics();
- draw();
- requestAnimationFrame(animate);
- }
+      // 3. Radial seam lines & surrounding pentagon patches
+      for (let i = 0; i < 5; i++) {
+        const a1 = (i * 2 * Math.PI) / 5 - Math.PI / 2;
+        const a2 = ((i + 1) * 2 * Math.PI) / 5 - Math.PI / 2;
 
- window.onload = function() {
- animate();
- };
- </script>
+        const p1x = innerR * Math.cos(a1);
+        const p1y = innerR * Math.sin(a1);
+        const s1x = lineR * Math.cos(a1);
+        const s1y = lineR * Math.sin(a1);
+        const s2x = lineR * Math.cos(a2);
+        const s2y = lineR * Math.sin(a2);
+
+        ctx.beginPath();
+        ctx.moveTo(p1x, p1y);
+        ctx.lineTo(s1x, s1y);
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = Math.max(1, r * 0.08);
+        ctx.stroke();
+
+        const edge1X = r * 1.2 * Math.cos(a1 + 0.25);
+        const edge1Y = r * 1.2 * Math.sin(a1 + 0.25);
+        const edge2X = r * 1.2 * Math.cos(a2 - 0.25);
+        const edge2Y = r * 1.2 * Math.sin(a2 - 0.25);
+
+        ctx.beginPath();
+        ctx.moveTo(s1x, s1y);
+        ctx.lineTo(edge1X, edge1Y);
+        ctx.lineTo(edge2X, edge2Y);
+        ctx.lineTo(s2x, s2y);
+        ctx.closePath();
+        ctx.fillStyle = colors.accent;
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function draw() {
+      // 1. Draw Tie-Dye Canvas Background
+      if (tieDyePattern) {
+        ctx.drawImage(tieDyePattern, 0, 0);
+      } else {
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      // 2. Draw Central Mass Node
+      ctx.beginPath();
+      ctx.arc(centralNode.x, centralNode.y, centralNode.radius + 4, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 51, 51, 0.4)';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(centralNode.x, centralNode.y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff0000';
+      ctx.fill();
+
+      // 3. Draw Balls & Randomized Glowing Trails
+      for (const b of balls) {
+        if (b.trail.length > 1) {
+          ctx.beginPath();
+          ctx.moveTo(b.trail[0].x, b.trail[0].y);
+          for (let t = 1; t < b.trail.length; t++) {
+            ctx.lineTo(b.trail[t].x, b.trail[t].y);
+          }
+          ctx.strokeStyle = b.colors.trail;
+          ctx.lineWidth = 2.5;
+          ctx.shadowColor = b.colors.trail;
+          ctx.shadowBlur = 8;
+          ctx.stroke();
+          ctx.shadowBlur = 0; // Reset canvas shadow blur
+        }
+
+        drawSoccerBall(ctx, b.x, b.y, b.radius, b.angle, b.colors);
+      }
+    }
+
+    function animate() {
+      updatePhysics();
+      draw();
+      requestAnimationFrame(animate);
+    }
+
+    window.onload = function() {
+      resizeCanvas();
+      animate();
+    };
+  </script>
 </body>
 </html>

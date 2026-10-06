@@ -110,7 +110,7 @@
  </div>
 
  <div class="instructions">
- Click or touch anywhere on the canvas to launch Earth into orbit.
+ Click or touch anywhere on the canvas to launch Earth into orbit (up to 20 at a time).
  </div>
 
  <script>
@@ -127,6 +127,7 @@
  const FIXED_LAUNCH_ANGLE = 90; // Fixed direction in degrees (90° = straight right)
  const TRAIL_LENGTH = 300; // Number of historic trail points stored
  const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
+ const MAX_BALLS = 20; // Maximum number of concurrent planets allowed
 
  // STATE VARIABLES
  let balls = [];
@@ -194,7 +195,6 @@
  bgCtx.arc(sx, sy, size, 0, Math.PI * 2);
  bgCtx.fill();
 
- // Cross-flare effect for large bright stars
  if (size > 2.0) {
  bgCtx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
  bgCtx.lineWidth = 0.5;
@@ -213,10 +213,154 @@
  drawDistantGalaxy(bgCtx, bgCanvas.width * 0.82, bgCanvas.height * 0.78, -35, 0.5, '#f472b6', '#818cf8');
 
  // 5. Distant Background Planets
- // Blue Gas Giant with Saturn-like Rings
  drawBackgroundPlanet(bgCtx, bgCanvas.width * 0.86, bgCanvas.height * 0.22, 20, '#38bdf8', '#1e3a8a', true);
- // Orange Desert Planet
  drawBackgroundPlanet(bgCtx, bgCanvas.width * 0.11, bgCanvas.height * 0.8, 14, '#f97316', '#7c2d12', false);
+
+ // 6. Cow Jumping Over the Moon
+ drawCowAndMoon(bgCtx, bgCanvas.width * 0.22, bgCanvas.height * 0.28);
+ }
+
+ function drawCowAndMoon(gCtx, x, y) {
+ gCtx.save();
+ 
+ // Moon Outer Glow
+ const moonRadius = 32;
+ const moonGlow = gCtx.createRadialGradient(x, y, moonRadius * 0.8, x, y, moonRadius * 1.8);
+ moonGlow.addColorStop(0, 'rgba(254, 243, 199, 0.35)');
+ moonGlow.addColorStop(1, 'rgba(254, 243, 199, 0)');
+ 
+ gCtx.beginPath();
+ gCtx.arc(x, y, moonRadius * 1.8, 0, Math.PI * 2);
+ gCtx.fillStyle = moonGlow;
+ gCtx.fill();
+
+ // Moon Body
+ const moonGrad = gCtx.createRadialGradient(x - 8, y - 8, 4, x, y, moonRadius);
+ moonGrad.addColorStop(0, '#fffbeb');
+ moonGrad.addColorStop(0.7, '#fde68a');
+ moonGrad.addColorStop(1, '#d97706');
+
+ gCtx.beginPath();
+ gCtx.arc(x, y, moonRadius, 0, Math.PI * 2);
+ gCtx.fillStyle = moonGrad;
+ gCtx.fill();
+
+ // Craters
+ gCtx.fillStyle = 'rgba(180, 83, 9, 0.18)';
+ const craters = [
+ { cx: x - 10, cy: y - 6, r: 6 },
+ { cx: x + 8, cy: y + 10, r: 8 },
+ { cx: x + 12, cy: y - 10, r: 4 },
+ { cx: x - 14, cy: y + 12, r: 5 }
+ ];
+ craters.forEach(c => {
+ gCtx.beginPath();
+ gCtx.arc(c.cx, c.cy, c.r, 0, Math.PI * 2);
+ gCtx.fill();
+ });
+
+ // Jump Arc Trail
+ gCtx.beginPath();
+ gCtx.ellipse(x, y + 8, 48, 32, -Math.PI / 12, Math.PI * 1.05, Math.PI * 1.88);
+ gCtx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+ gCtx.lineWidth = 1.5;
+ gCtx.setLineDash([3, 3]);
+ gCtx.stroke();
+ gCtx.setLineDash([]);
+
+ // Cow Leaping Over Moon
+ const cowX = x + 10;
+ const cowY = y - 40;
+ 
+ gCtx.translate(cowX, cowY);
+ gCtx.rotate(-15 * Math.PI / 180);
+
+ // Cow Body
+ gCtx.fillStyle = '#ffffff';
+ gCtx.beginPath();
+ gCtx.ellipse(0, 0, 16, 10, 0, 0, Math.PI * 2);
+ gCtx.fill();
+
+ // Black Spots
+ gCtx.fillStyle = '#111111';
+ gCtx.beginPath();
+ gCtx.arc(-5, -3, 4, 0, Math.PI * 2);
+ gCtx.arc(3, 2, 5, 0, Math.PI * 2);
+ gCtx.arc(-2, 4, 3, 0, Math.PI * 2);
+ gCtx.fill();
+
+ // Cow Head
+ gCtx.fillStyle = '#ffffff';
+ gCtx.beginPath();
+ gCtx.arc(-15, -5, 7, 0, Math.PI * 2);
+ gCtx.fill();
+
+ // Pink Snout
+ gCtx.fillStyle = '#f472b6';
+ gCtx.beginPath();
+ gCtx.ellipse(-19, -3, 4, 3, 0, 0, Math.PI * 2);
+ gCtx.fill();
+
+ // Eye & Nostril
+ gCtx.fillStyle = '#000000';
+ gCtx.beginPath();
+ gCtx.arc(-15, -7, 1, 0, Math.PI * 2);
+ gCtx.arc(-20, -4, 0.7, 0, Math.PI * 2);
+ gCtx.fill();
+
+ // Horns
+ gCtx.fillStyle = '#fbbf24';
+ gCtx.beginPath();
+ gCtx.moveTo(-13, -11);
+ gCtx.lineTo(-12, -15);
+ gCtx.lineTo(-10, -11);
+ gCtx.fill();
+
+ // Ears
+ gCtx.fillStyle = '#ffffff';
+ gCtx.beginPath();
+ gCtx.ellipse(-11, -8, 3, 1.8, Math.PI / 4, 0, Math.PI * 2);
+ gCtx.fill();
+
+ // Leaping Legs
+ gCtx.strokeStyle = '#ffffff';
+ gCtx.lineWidth = 2.5;
+ gCtx.lineCap = 'round';
+
+ gCtx.beginPath();
+ gCtx.moveTo(-8, 5);
+ gCtx.lineTo(-15, 13);
+ gCtx.moveTo(-4, 6);
+ gCtx.lineTo(-9, 15);
+ gCtx.moveTo(6, 5);
+ gCtx.lineTo(15, 12);
+ gCtx.moveTo(10, 3);
+ gCtx.lineTo(17, 8);
+ gCtx.stroke();
+
+ // Hooves
+ gCtx.fillStyle = '#111111';
+ gCtx.beginPath();
+ gCtx.arc(-15, 13, 1.5, 0, Math.PI * 2);
+ gCtx.arc(-9, 15, 1.5, 0, Math.PI * 2);
+ gCtx.arc(15, 12, 1.5, 0, Math.PI * 2);
+ gCtx.arc(17, 8, 1.5, 0, Math.PI * 2);
+ gCtx.fill();
+
+ // Tail
+ gCtx.strokeStyle = '#ffffff';
+ gCtx.lineWidth = 1.5;
+ gCtx.beginPath();
+ gCtx.moveTo(14, -2);
+ gCtx.quadraticCurveTo(21, -7, 23, -2);
+ gCtx.stroke();
+
+ gCtx.fillStyle = '#111111';
+ gCtx.beginPath();
+ gCtx.arc(23, -2, 2, 0, Math.PI * 2);
+ gCtx.fill();
+
+ gCtx.restore();
  }
 
  function drawDistantGalaxy(gCtx, x, y, angleDeg, scale, coreColor, armColor) {
@@ -315,14 +459,19 @@
  const vx = LAUNCH_VELOCITY * Math.sin(rad);
  const vy = -LAUNCH_VELOCITY * Math.cos(rad);
 
- balls = [{
+ // Remove oldest planet if capacity reached
+ if (balls.length >= MAX_BALLS) {
+ balls.shift();
+ }
+
+ balls.push({
  x: x,
  y: y,
  vx: vx,
  vy: vy,
  radius: 10,
  trail: []
- }];
+ });
  }
 
  function resetSimulation() {
@@ -464,7 +613,7 @@
  ctx.fill();
  ctx.restore();
 
- // 3. Draw Orbit Trail & Earth Planet
+ // 3. Draw Orbit Trail & Earth Planets
  for (const b of balls) {
  if (b.trail.length > 1) {
  ctx.beginPath();
