@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gravity Physics Baseline</title>
+    <title>Gravity Physics - Portals & Wall Bounce</title>
     <style>
         * {
             box-sizing: border-box;
@@ -22,7 +22,7 @@
             justify-content: flex-start;
             height: 100vh;
             overflow: hidden;
-            padding: 16px;
+            padding: 12px;
         }
 
         /* Top Header Bar */
@@ -32,33 +32,58 @@
             align-items: center;
             width: 100%;
             max-width: 1100px;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             padding-bottom: 8px;
             border-bottom: 1px solid #ffffff;
+            flex-wrap: wrap;
+            gap: 8px;
         }
 
         h1 {
-            font-size: 18px;
+            font-size: 16px;
             letter-spacing: 2px;
             text-transform: uppercase;
             font-weight: bold;
         }
 
-        .btn-reset {
+        .controls-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .btn {
             background: transparent;
             color: #ffffff;
             border: 1px solid #ffffff;
-            padding: 6px 16px;
-            font-size: 14px;
+            padding: 8px 14px;
+            font-size: 13px;
             font-weight: bold;
             cursor: pointer;
             text-transform: uppercase;
             letter-spacing: 1px;
             transition: all 0.15s ease-in-out;
+            border-radius: 4px;
+            min-height: 38px; /* Chromebook touch friendly */
         }
 
-        .btn-reset:hover {
+        .btn:hover {
             background: #ffffff;
+            color: #000000;
+        }
+
+        .btn.active {
+            background: #ffffff;
+            color: #000000;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+        }
+
+        .btn-portal-blue {
+            border-color: #00f0ff;
+            color: #00f0ff;
+        }
+        .btn-portal-blue.active, .btn-portal-blue:hover {
+            background: #00f0ff;
             color: #000000;
         }
 
@@ -75,18 +100,38 @@
 
         canvas {
             background-color: #000000;
-            border: 1px solid #ffffff;
+            border: 2px solid #ffffff;
             display: block;
             cursor: crosshair;
             width: 100%;
             height: 100%;
+            border-radius: 4px;
         }
 
-        .instructions {
+        .instructions-bar {
             margin-top: 8px;
-            font-size: 11px;
-            color: #888888;
-            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 1100px;
+            font-size: 12px;
+            color: #aaaaaa;
+        }
+
+        #spam-status {
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 3px;
+            transition: all 0.2s;
+        }
+
+        .status-ready {
+            color: #00ff66;
+        }
+
+        .status-cooldown {
+            color: #ff3366;
         }
     </style>
 </head>
@@ -94,8 +139,14 @@
 
     <!-- Header Section -->
     <div id="header">
-        <h1>Gravity Simulation</h1>
-        <button class="btn-reset" onclick="resetSimulation()">Reset</button>
+        <h1>Gravity & Portals</h1>
+        
+        <div class="controls-group">
+            <button id="mode-ball-btn" class="btn active" onclick="setMode('ball')">⚽ Launch Ball</button>
+            <button id="mode-portal-btn" class="btn btn-portal-blue" onclick="setMode('portal')">🌀 Place Portals</button>
+            <button class="btn" onclick="clearPortals()">Clear Portals</button>
+            <button class="btn" onclick="resetSimulation()">Reset All</button>
+        </div>
     </div>
 
     <!-- Canvas Container -->
@@ -103,8 +154,10 @@
         <canvas id="simCanvas"></canvas>
     </div>
 
-    <div class="instructions">
-        Click anywhere on the canvas to launch a ball.
+    <!-- Instructions & Cooldown Indicator -->
+    <div class="instructions-bar">
+        <span id="instruction-text">Mode: Launch Ball — Click/Tap canvas to spawn a ball.</span>
+        <div>Spam Filter: <span id="spam-status" class="status-ready">READY</span></div>
     </div>
 
     <script>
@@ -117,15 +170,21 @@
         const FIXED_LAUNCH_ANGLE = 90;     // Fixed direction in degrees (90° = straight right)
         const TRAIL_LENGTH = 300;         // Number of historic trail points stored
         const SOFTENING_FACTOR = 400;     // Prevents infinite velocity near center
+        const SPAM_COOLDOWN_MS = 1000;    // 1-second delay between launches
+        const WALL_BOUNCE_RESTITUTION = 0.85; // Bounciness off outer walls
 
         // STATE VARIABLES
+        let currentMode = 'ball';          // 'ball' or 'portal'
+        let lastLaunchTime = 0;           // Timestamp for spam-click filter
         let balls = [];
+        let portals = [];                 // Array holding up to 2 portal objects
+        let portalPulseAngle = 0;         // For portal visual animation
 
         // Central Gravity Node Definition
         const centralNode = {
             x: 0,
             y: 0,
-            radius: 12
+            radius: 14
         };
 
         function resizeCanvas() {
@@ -141,55 +200,145 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // Canvas Click Handler: Directly launch ball at click position
-        canvas.addEventListener('click', (e) => {
+        function setMode(mode) {
+            currentMode = mode;
+            const ballBtn = document.getElementById('mode-ball-btn');
+            const portalBtn = document.getElementById('mode-portal-btn');
+            const instrText = document.getElementById('instruction-text');
+
+            if (mode === 'ball') {
+                ballBtn.classList.add('active');
+                portalBtn.classList.remove('active');
+                instrText.textContent = "Mode: Launch Ball — Click/Tap canvas to spawn a ball (1s cooldown).";
+            } else {
+                portalBtn.classList.add('active');
+                ballBtn.classList.remove('active');
+                instrText.textContent = "Mode: Place Portals — Click canvas to set Portal 1 (Blue) and Portal 2 (Orange).";
+            }
+        }
+
+        // Pointer/Click Event handling for Chromebook Touch + Mouse
+        canvas.addEventListener('pointerdown', (e) => {
             const rect = canvas.getBoundingClientRect();
             const clickX = e.clientX - rect.left;
             const clickY = e.clientY - rect.top;
 
-            launchBall(clickX, clickY);
+            if (currentMode === 'ball') {
+                attemptLaunchBall(clickX, clickY);
+            } else if (currentMode === 'portal') {
+                placePortal(clickX, clickY);
+            }
         });
 
-        function launchBall(x, y) {
-            // Fixed launch direction: 90° (0° = UP, 90° = RIGHT, 180° = DOWN, 270° = LEFT)
-            const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
-            const vx = LAUNCH_VELOCITY * Math.sin(rad);  // sin(90°) = 1  -> vx = 5
-            const vy = -LAUNCH_VELOCITY * Math.cos(rad); // cos(90°) = 0  -> vy = 0
+        function attemptLaunchBall(x, y) {
+            const now = Date.now();
+            const timeElapsed = now - lastLaunchTime;
 
-            // Overwrite existing array to strictly maintain a single ball on screen
+            // Spam-Click Filter Check
+            if (timeElapsed < SPAM_COOLDOWN_MS) {
+                flashSpamWarning();
+                return;
+            }
+
+            lastLaunchTime = now;
+            updateSpamUI();
+
+            // Launch direction calculation
+            const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
+            const vx = LAUNCH_VELOCITY * Math.sin(rad);  
+            const vy = -LAUNCH_VELOCITY * Math.cos(rad); 
+
+            // Spawn new ball (resets ball list to maintain single active ball standard)
             balls = [{
                 x: x,
                 y: y,
                 vx: vx,
                 vy: vy,
-                radius: 4,
-                trail: [] // Stores history of past {x, y} coordinates
+                radius: 6,
+                scaleX: 1.0,               // Horizontal deformation scale factor
+                scaleY: 1.0,               // Vertical deformation scale factor
+                teleportCooldown: 0,      // Cooldown timer to prevent infinite teleport loop
+                trail: []
             }];
+        }
+
+        function placePortal(x, y) {
+            const portalColors = [
+                { border: '#00f0ff', core: '#0088cc', label: '1' }, // Portal 1 (Cyan/Blue)
+                { border: '#ff6600', core: '#ff3300', label: '2' }  // Portal 2 (Orange)
+            ];
+
+            if (portals.length < 2) {
+                // Add Portal 1 or 2
+                const colorScheme = portalColors[portals.length];
+                portals.push({
+                    x: x,
+                    y: y,
+                    radius: 22,
+                    ...colorScheme
+                });
+            } else {
+                // Replace oldest portal (cycle between 0 and 1)
+                portals.shift();
+                const colorScheme = portalColors[1];
+                // Relabel remaining portal as #1 and new one as #2
+                portals[0].border = portalColors[0].border;
+                portals[0].core = portalColors[0].core;
+                portals[0].label = '1';
+
+                portals.push({
+                    x: x,
+                    y: y,
+                    radius: 22,
+                    border: portalColors[1].border,
+                    core: portalColors[1].core,
+                    label: '2'
+                });
+            }
+        }
+
+        function clearPortals() {
+            portals = [];
         }
 
         function resetSimulation() {
             balls = [];
+            portals = [];
+        }
+
+        function flashSpamWarning() {
+            const statusElem = document.getElementById('spam-status');
+            statusElem.textContent = 'WAIT 1s!';
+            statusElem.className = 'status-cooldown';
+        }
+
+        function updateSpamUI() {
+            const statusElem = document.getElementById('spam-status');
+            statusElem.textContent = 'COOLDOWN...';
+            statusElem.className = 'status-cooldown';
+
+            setTimeout(() => {
+                statusElem.textContent = 'READY';
+                statusElem.className = 'status-ready';
+            }, SPAM_COOLDOWN_MS);
         }
 
         function updatePhysics() {
             for (let i = balls.length - 1; i >= 0; i--) {
                 const b = balls[i];
 
-                // Remove ball if it travels too far off-screen (prevents memory leak)
-                const margin = 500;
-                if (b.x < -margin || b.x > canvas.width + margin || 
-                    b.y < -margin || b.y > canvas.height + margin) {
-                    balls.splice(i, 1);
-                    continue;
+                // Decrement teleportation cooldown
+                if (b.teleportCooldown > 0) {
+                    b.teleportCooldown--;
                 }
 
-                // Distance vector to central gravity node
+                // 1. Central Gravity Node Calculation
                 const dx = centralNode.x - b.x;
                 const dy = centralNode.y - b.y;
                 const distSq = dx * dx + dy * dy;
                 const dist = Math.sqrt(distSq);
 
-                // Absorption check: ball collides with central mass
+                // Absorption check: ball hits central mass
                 if (dist < centralNode.radius + b.radius) {
                     balls.splice(i, 1);
                     continue;
@@ -197,16 +346,84 @@
 
                 // Inverse square law gravity acceleration
                 const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
-
-                // Acceleration vector components
                 const ax = acceleration * (dx / dist);
                 const ay = acceleration * (dy / dist);
 
-                // Update velocity and position
                 b.vx += ax;
                 b.vy += ay;
                 b.x += b.vx;
                 b.y += b.vy;
+
+                // 2. Wall Collision & Deformation Logic (Squash & Stretch Bounce)
+                let bounced = false;
+
+                // Left Wall Collision
+                if (b.x - b.radius <= 0) {
+                    b.x = b.radius;
+                    b.vx = -b.vx * WALL_BOUNCE_RESTITUTION;
+                    b.scaleX = 0.4;  // Squash horizontally
+                    b.scaleY = 1.6;  // Stretch vertically
+                    bounced = true;
+                } 
+                // Right Wall Collision
+                else if (b.x + b.radius >= canvas.width) {
+                    b.x = canvas.width - b.radius;
+                    b.vx = -b.vx * WALL_BOUNCE_RESTITUTION;
+                    b.scaleX = 0.4;
+                    b.scaleY = 1.6;
+                    bounced = true;
+                }
+
+                // Top Wall Collision
+                if (b.y - b.radius <= 0) {
+                    b.y = b.radius;
+                    b.vy = -b.vy * WALL_BOUNCE_RESTITUTION;
+                    b.scaleX = 1.6;  // Stretch horizontally
+                    b.scaleY = 0.4;  // Squash vertically
+                    bounced = true;
+                } 
+                // Bottom Wall Collision
+                else if (b.y + b.radius >= canvas.height) {
+                    b.y = canvas.height - b.radius;
+                    b.vy = -b.vy * WALL_BOUNCE_RESTITUTION;
+                    b.scaleX = 1.6;
+                    b.scaleY = 0.4;
+                    bounced = true;
+                }
+
+                // Smoothly decay ball deformation back to normal circle (scale = 1.0)
+                b.scaleX += (1.0 - b.scaleX) * 0.18;
+                b.scaleY += (1.0 - b.scaleY) * 0.18;
+
+                // 3. Portal Teleportation Logic
+                if (portals.length === 2 && b.teleportCooldown === 0) {
+                    for (let pIdx = 0; pIdx < 2; pIdx++) {
+                        const inPortal = portals[pIdx];
+                        const outPortal = portals[1 - pIdx]; // The other portal
+
+                        const pdx = inPortal.x - b.x;
+                        const pdy = inPortal.y - b.y;
+                        const pDist = Math.sqrt(pdx * pdx + pdy * pdy);
+
+                        // If ball touches portal ring
+                        if (pDist < inPortal.radius + b.radius) {
+                            // Calculate current speed magnitude
+                            const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy) || 1;
+
+                            // Teleport position to exit portal with an outward offset
+                            const exitAngle = Math.atan2(b.vy, b.vx);
+                            b.x = outPortal.x + Math.cos(exitAngle) * (outPortal.radius + b.radius + 4);
+                            b.y = outPortal.y + Math.sin(exitAngle) * (outPortal.radius + b.radius + 4);
+
+                            // Set teleport cooldown to prevent instant re-entry
+                            b.teleportCooldown = 20;
+
+                            // Clear trail jump line to keep drawing clean
+                            b.trail = [];
+                            break;
+                        }
+                    }
+                }
 
                 // Record position history for line trail
                 b.trail.push({ x: b.x, y: b.y });
@@ -214,6 +431,9 @@
                     b.trail.shift();
                 }
             }
+
+            // Update portal animation pulse
+            portalPulseAngle += 0.05;
         }
 
         function draw() {
@@ -227,31 +447,63 @@
             ctx.fillStyle = '#ffffff';
             ctx.fill();
 
-            // Center mark on node
             ctx.beginPath();
-            ctx.arc(centralNode.x, centralNode.y, 2, 0, Math.PI * 2);
+            ctx.arc(centralNode.x, centralNode.y, 3, 0, Math.PI * 2);
             ctx.fillStyle = '#000000';
             ctx.fill();
 
-            // 2. Draw Ball & Trail
+            // 2. Draw Portals
+            for (const p of portals) {
+                const pulseRadius = p.radius + Math.sin(portalPulseAngle) * 3;
+
+                // Glowing outer ring
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, pulseRadius, 0, Math.PI * 2);
+                ctx.strokeStyle = p.border;
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                // Inner core
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius * 0.6, 0, Math.PI * 2);
+                ctx.fillStyle = p.core;
+                ctx.globalAlpha = 0.4;
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+
+                // Label Portal Number
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 12px Courier New';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(p.label, p.x, p.y);
+            }
+
+            // 3. Draw Ball & Trail
             for (const b of balls) {
-                // Draw path line
+                // Draw path line trail
                 if (b.trail.length > 1) {
                     ctx.beginPath();
                     ctx.moveTo(b.trail[0].x, b.trail[0].y);
                     for (let t = 1; t < b.trail.length; t++) {
                         ctx.lineTo(b.trail[t].x, b.trail[t].y);
                     }
-                    ctx.strokeStyle = '#ffffff';
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
                     ctx.lineWidth = 1.2;
                     ctx.stroke();
                 }
 
-                // Draw ball object
+                // Draw deforming ball object (Squash & Stretch on wall bounce)
+                ctx.save();
+                ctx.translate(b.x, b.y);
+                ctx.scale(b.scaleX, b.scaleY);
+
                 ctx.beginPath();
-                ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+                ctx.arc(0, 0, b.radius, 0, Math.PI * 2);
                 ctx.fillStyle = '#ffffff';
                 ctx.fill();
+
+                ctx.restore();
             }
         }
 

@@ -104,7 +104,7 @@
     </div>
 
     <div class="instructions">
-        Click anywhere on the canvas to launch a ball.
+        Click anywhere on the canvas to launch a ball (1s cooldown).
     </div>
 
     <script>
@@ -117,9 +117,13 @@
         const FIXED_LAUNCH_ANGLE = 90;     // Fixed direction in degrees (90° = straight right)
         const TRAIL_LENGTH = 300;         // Number of historic trail points stored
         const SOFTENING_FACTOR = 400;     // Prevents infinite velocity near center
+        const COOLDOWN_TIME_MS = 1000;    // 1-second spam click cooldown
+        const BALL_LIFESPAN_MS = 10000;   // 10 seconds before explosion
 
         // STATE VARIABLES
         let balls = [];
+        let particles = [];
+        let lastLaunchTime = 0;
 
         // Central Gravity Node Definition
         const centralNode = {
@@ -141,20 +145,26 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // Canvas Click Handler: Directly launch ball at click position
+        // Canvas Click Handler: Spam-click protected
         canvas.addEventListener('click', (e) => {
+            const now = Date.now();
+            if (now - lastLaunchTime < COOLDOWN_TIME_MS) {
+                return; // Block launches faster than 1x per second
+            }
+
             const rect = canvas.getBoundingClientRect();
             const clickX = e.clientX - rect.left;
             const clickY = e.clientY - rect.top;
 
             launchBall(clickX, clickY);
+            lastLaunchTime = now;
         });
 
         function launchBall(x, y) {
             // Fixed launch direction: 90° (0° = UP, 90° = RIGHT, 180° = DOWN, 270° = LEFT)
             const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
-            const vx = LAUNCH_VELOCITY * Math.sin(rad);  // sin(90°) = 1  -> vx = 5
-            const vy = -LAUNCH_VELOCITY * Math.cos(rad); // cos(90°) = 0  -> vy = 0
+            const vx = LAUNCH_VELOCITY * Math.sin(rad);  
+            const vy = -LAUNCH_VELOCITY * Math.cos(rad); 
 
             // Overwrite existing array to strictly maintain a single ball on screen
             balls = [{
@@ -163,19 +173,51 @@
                 vx: vx,
                 vy: vy,
                 radius: 4,
-                trail: [] // Stores history of past {x, y} coordinates
+                trail: [], // Stores history of past {x, y} coordinates
+                launchTime: Date.now() // Track launch timestamp for 10s timer
             }];
+        }
+
+        function createFireworks(x, y) {
+            const particleCount = 45;
+            const colors = ['#ff0055', '#00e5ff', '#ffea00', '#76ff03', '#d500f9', '#ff9100'];
+
+            for (let i = 0; i < particleCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 5 + 1;
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    radius: Math.random() * 2.5 + 1,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    alpha: 1.0,
+                    decay: Math.random() * 0.02 + 0.015
+                });
+            }
         }
 
         function resetSimulation() {
             balls = [];
+            particles = [];
         }
 
         function updatePhysics() {
+            const now = Date.now();
+
+            // Update Ball Physics & Timers
             for (let i = balls.length - 1; i >= 0; i--) {
                 const b = balls[i];
 
-                // Remove ball if it travels too far off-screen (prevents memory leak)
+                // 10-second explosion check
+                if (now - b.launchTime >= BALL_LIFESPAN_MS) {
+                    createFireworks(b.x, b.y);
+                    balls.splice(i, 1);
+                    continue;
+                }
+
+                // Remove ball if it travels too far off-screen
                 const margin = 500;
                 if (b.x < -margin || b.x > canvas.width + margin || 
                     b.y < -margin || b.y > canvas.height + margin) {
@@ -212,6 +254,20 @@
                 b.trail.push({ x: b.x, y: b.y });
                 if (b.trail.length > TRAIL_LENGTH) {
                     b.trail.shift();
+                }
+            }
+
+            // Update Firework Particle Physics
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vx *= 0.98; // Air resistance dampening
+                p.vy *= 0.98;
+                p.alpha -= p.decay;
+
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
                 }
             }
         }
@@ -252,6 +308,17 @@
                 ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
                 ctx.fillStyle = '#ffffff';
                 ctx.fill();
+            }
+
+            // 3. Draw Firework Particles
+            for (const p of particles) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, p.alpha);
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+                ctx.restore();
             }
         }
 
