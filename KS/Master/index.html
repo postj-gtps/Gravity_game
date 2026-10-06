@@ -46,7 +46,7 @@
             font-weight: bold;
         }
 
-        /* Speed Control Container */
+        /* Control Group Container */
         .control-group {
             display: flex;
             align-items: center;
@@ -60,10 +60,27 @@
             white-space: nowrap;
         }
 
+        .control-group select {
+            background-color: #000000;
+            color: #ffffff;
+            border: 1px solid #ffffff;
+            padding: 6px 10px;
+            font-family: inherit;
+            font-size: 13px;
+            cursor: pointer;
+            text-transform: uppercase;
+            outline: none;
+        }
+
+        .control-group select:focus {
+            border-color: #888888;
+            background-color: #111111;
+        }
+
         .control-group input[type="range"] {
             cursor: pointer;
             accent-color: #ffffff;
-            width: 140px;
+            width: 130px;
         }
 
         .btn-reset {
@@ -102,6 +119,7 @@
             cursor: crosshair;
             width: 100%;
             height: 100%;
+            touch-action: none;
         }
 
         .instructions {
@@ -118,6 +136,22 @@
     <div id="header">
         <h1>Gravity Simulation</h1>
         
+        <!-- Central Body Dropdown Selection -->
+        <div class="control-group">
+            <label for="bodySelect">Central Body:</label>
+            <select id="bodySelect">
+                <option value="sun">Sun</option>
+                <option value="mercury">Mercury</option>
+                <option value="venus">Venus</option>
+                <option value="earth" selected>Earth</option>
+                <option value="mars">Mars</option>
+                <option value="jupiter">Jupiter</option>
+                <option value="saturn">Saturn</option>
+                <option value="uranus">Uranus</option>
+                <option value="neptune">Neptune</option>
+            </select>
+        </div>
+
         <div class="control-group">
             <label for="speedSlider">Launch Speed: <span id="speedValue">5</span></label>
             <input type="range" id="speedSlider" min="1" max="25" value="5" step="1">
@@ -132,7 +166,7 @@
     </div>
 
     <div class="instructions">
-        Click anywhere on the canvas to launch a ball (1 launch per second max).
+        Click or tap anywhere on the canvas to launch a ball (1 launch per second max).
     </div>
 
     <script>
@@ -140,13 +174,29 @@
         const ctx = canvas.getContext('2d');
         const speedSlider = document.getElementById('speedSlider');
         const speedValueDisplay = document.getElementById('speedValue');
+        const bodySelect = document.getElementById('bodySelect');
 
         // SIMULATION CONSTANTS
-        const GRAVITY_CONSTANT = 1800;    // Strength of gravitational pull (G)
+        const BASE_GRAVITY = 1800;         // Base gravity constant scale
         const FIXED_LAUNCH_ANGLE = 90;     // Fixed direction in degrees (90° = straight right)
-        const TRAIL_LENGTH = 300;         // Number of historic trail points stored
-        const SOFTENING_FACTOR = 400;     // Prevents infinite velocity near center
-        const SPAM_COOLDOWN_MS = 1000;     // Minimum time between clicks (1 launch per second max)
+        const TRAIL_LENGTH = 300;          // Number of historic trail points stored
+        const SOFTENING_FACTOR = 400;      // Prevents infinite velocity near center
+        const SPAM_COOLDOWN_MS = 1000;      // Minimum time between clicks (1 launch per second max)
+
+        // SOLAR SYSTEM CELESTIAL BODIES DATA
+        // Relative masses maintain true physical ordering:
+        // Sun > Jupiter > Saturn > Neptune > Uranus > Earth > Venus > Mars > Mercury
+        const CELESTIAL_BODIES = {
+            sun:     { name: 'Sun',     massFactor: 5.0,  radius: 22, color: '#ffcc00' },
+            mercury: { name: 'Mercury', massFactor: 0.35, radius: 6,  color: '#aaaaaa' },
+            venus:   { name: 'Venus',   massFactor: 0.85, radius: 9,  color: '#e3bb76' },
+            earth:   { name: 'Earth',   massFactor: 1.0,  radius: 10, color: '#4f97e8' },
+            mars:    { name: 'Mars',    massFactor: 0.55, radius: 8,  color: '#e25e40' },
+            jupiter: { name: 'Jupiter', massFactor: 3.2,  radius: 18, color: '#d8ca9d' },
+            saturn:  { name: 'Saturn',  massFactor: 2.3,  radius: 15, color: '#e4d191', hasRings: true },
+            uranus:  { name: 'Uranus',  massFactor: 1.5,  radius: 13, color: '#7de3e4' },
+            neptune: { name: 'Neptune', massFactor: 1.7,  radius: 13, color: '#4b70dd' }
+        };
 
         // STATE VARIABLES
         let balls = [];
@@ -156,12 +206,27 @@
         const centralNode = {
             x: 0,
             y: 0,
-            radius: 12
+            key: 'earth',
+            ...CELESTIAL_BODIES.earth
         };
 
         // Update displayed speed label on slider movement
         speedSlider.addEventListener('input', () => {
             speedValueDisplay.textContent = speedSlider.value;
+        });
+
+        // Dropdown Selection Handler
+        bodySelect.addEventListener('change', (e) => {
+            const selectedKey = e.target.value;
+            const bodyData = CELESTIAL_BODIES[selectedKey];
+            if (bodyData) {
+                centralNode.key = selectedKey;
+                centralNode.massFactor = bodyData.massFactor;
+                centralNode.radius = bodyData.radius;
+                centralNode.color = bodyData.color;
+                centralNode.hasRings = !!bodyData.hasRings;
+                centralNode.name = bodyData.name;
+            }
         });
 
         function resizeCanvas() {
@@ -177,19 +242,25 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // Canvas Click Handler with rate limiting
-        canvas.addEventListener('click', (e) => {
+        // Launch handler with 1x per second rate limiting (Spam Filter)
+        function handleLaunchInput(clientX, clientY) {
             const now = Date.now();
             if (now - lastLaunchTime < SPAM_COOLDOWN_MS) {
-                return; // Filter out clicks faster than 1x per second
+                return; // Rate limit: maximum 1 launch per second
             }
 
             const rect = canvas.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const clickY = e.clientY - rect.top;
+            const clickX = clientX - rect.left;
+            const clickY = clientY - rect.top;
 
             lastLaunchTime = now;
             launchBall(clickX, clickY);
+        }
+
+        // Pointer/Click Event Listeners
+        canvas.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            handleLaunchInput(e.clientX, e.clientY);
         });
 
         function launchBall(x, y) {
@@ -216,6 +287,9 @@
         }
 
         function updatePhysics() {
+            // Effective gravitational pull proportional to selected central body's mass factor
+            const currentGravity = BASE_GRAVITY * centralNode.massFactor;
+
             for (let i = balls.length - 1; i >= 0; i--) {
                 const b = balls[i];
 
@@ -239,8 +313,8 @@
                     continue;
                 }
 
-                // Inverse square law gravity acceleration
-                const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
+                // Gravity acceleration using mass factor
+                const acceleration = currentGravity / (distSq + SOFTENING_FACTOR);
 
                 // Acceleration vector components
                 const ax = acceleration * (dx / dist);
@@ -265,19 +339,36 @@
             ctx.fillStyle = '#000000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Draw Central Mass Node
+            // 1. Draw Saturn's Rings if selected
+            if (centralNode.hasRings) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.ellipse(centralNode.x, centralNode.y, centralNode.radius * 2.2, centralNode.radius * 0.7, -Math.PI / 6, 0, Math.PI * 2);
+                ctx.strokeStyle = '#c2b280';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // 2. Draw Central Celestial Mass Node
             ctx.beginPath();
             ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
-            ctx.fillStyle = '#ffffff';
+            ctx.fillStyle = centralNode.color;
             ctx.fill();
 
             // Center mark on node
             ctx.beginPath();
-            ctx.arc(centralNode.x, centralNode.y, 2, 0, Math.PI * 2);
+            ctx.arc(centralNode.x, centralNode.y, Math.max(1.5, centralNode.radius * 0.15), 0, Math.PI * 2);
             ctx.fillStyle = '#000000';
             ctx.fill();
 
-            // 2. Draw Ball & Trail
+            // Label for Central Mass
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '12px "Courier New", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(centralNode.name, centralNode.x, centralNode.y + centralNode.radius + 16);
+
+            // 3. Draw Ball & Trail
             for (const b of balls) {
                 if (b.trail.length > 1) {
                     ctx.beginPath();
