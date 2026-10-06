@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gravity Physics Baseline</title>
+  <title>Halloween Gravity Simulation</title>
   <style>
     * {
       box-sizing: border-box;
@@ -15,8 +15,8 @@
     }
 
     body {
-      background-color: #000000;
-      color: #ffffff;
+      background-color: #0d021a;
+      color: #ff7518;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -36,7 +36,8 @@
       max-width: 1100px;
       margin-bottom: 12px;
       padding-bottom: 8px;
-      border-bottom: 1px solid #ffffff;
+      border-bottom: 2px solid #ff7518;
+      box-shadow: 0 4px 12px rgba(255, 117, 24, 0.2);
     }
 
     h1 {
@@ -44,24 +45,47 @@
       letter-spacing: 2px;
       text-transform: uppercase;
       font-weight: bold;
+      color: #ff7518;
+      text-shadow: 0 0 8px rgba(255, 117, 24, 0.6);
     }
 
-    .btn-reset {
-      background: transparent;
-      color: #ffffff;
-      border: 1px solid #ffffff;
-      padding: 6px 16px;
-      font-size: 14px;
+    .controls {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      background: #1a0933;
+      color: #ff7518;
+      border: 1px solid #ff7518;
+      padding: 6px 14px;
+      font-size: 13px;
       font-weight: bold;
       cursor: pointer;
       text-transform: uppercase;
       letter-spacing: 1px;
+      border-radius: 4px;
       transition: all 0.15s ease-in-out;
     }
 
-    .btn-reset:hover {
-      background: #ffffff;
-      color: #000000;
+    .btn:hover {
+      background: #ff7518;
+      color: #0d021a;
+      box-shadow: 0 0 10px #ff7518;
+    }
+
+    .btn-active {
+      background: #39ff14;
+      color: #0d021a;
+      border-color: #39ff14;
+      box-shadow: 0 0 10px #39ff14;
+    }
+
+    .btn-active:hover {
+      background: #2cd60f;
+      color: #0d021a;
+      border-color: #2cd60f;
+      box-shadow: 0 0 12px #2cd60f;
     }
 
     /* Main Canvas Container */
@@ -76,19 +100,21 @@
     }
 
     canvas {
-      background-color: #000000;
-      border: 1px solid #ffffff;
+      background-color: #120024;
+      border: 2px solid #ff7518;
+      border-radius: 6px;
       display: block;
       cursor: crosshair;
       width: 100%;
       height: 100%;
       touch-action: none;
+      box-shadow: 0 0 20px rgba(157, 78, 221, 0.3);
     }
 
     .instructions {
       margin-top: 8px;
       font-size: 11px;
-      color: #888888;
+      color: #b9a0e0;
       text-align: center;
     }
   </style>
@@ -97,8 +123,11 @@
 
   <!-- Header Section -->
   <div id="header">
-    <h1>Gravity Simulation</h1>
-    <button class="btn-reset" onclick="resetSimulation()">Reset</button>
+    <h1>🎃 Halloween Gravity Sim</h1>
+    <div class="controls">
+      <button id="toggle-bounce-btn" class="btn" onclick="toggleBouncyWalls()">Bouncy Walls: OFF</button>
+      <button class="btn" onclick="resetSimulation()">Reset</button>
+    </div>
   </div>
 
   <!-- Canvas Container -->
@@ -107,7 +136,7 @@
   </div>
 
   <div class="instructions">
-    Tap or click anywhere on the canvas to launch balls (up to 40 on screen).
+    Tap or click anywhere on the canvas to launch spooky orbiters (up to 40 on screen).
   </div>
 
   <script>
@@ -119,19 +148,20 @@
     const LAUNCH_VELOCITY = 5; // Fixed velocity on click
     const FIXED_LAUNCH_ANGLE = 90; // Fixed direction in degrees (90° = straight right)
     const MAX_BALLS = 40; // Maximum active balls allowed on screen
-    const MAX_NOTE_TRAIL = 25; // Maximum number of music notes stored in trail
-    const NOTE_SPACING = 22; // Distance in pixels required between dropped notes
+    const MAX_NOTE_TRAIL = 25; // Maximum number of symbols stored in trail
+    const NOTE_SPACING = 22; // Distance in pixels required between dropped trail symbols
     const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
-    const MUSIC_NOTES = ['♪', '♫', '♩', '♬']; // Note symbols to cycle through
+    const SPOOKY_SYMBOLS = ['🎃', '👻', '🦇', '🕷️', '♫', '♩']; // Halloween trail symbols
 
     // STATE VARIABLES
     let balls = [];
+    let bouncyWalls = false;
 
     // Central Gravity Node Definition
     const centralNode = {
       x: 0,
       y: 0,
-      radius: 12
+      radius: 14
     };
 
     function resizeCanvas() {
@@ -146,6 +176,18 @@
 
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
+
+    function toggleBouncyWalls() {
+      bouncyWalls = !bouncyWalls;
+      const btn = document.getElementById('toggle-bounce-btn');
+      if (bouncyWalls) {
+        btn.innerText = 'Bouncy Walls: ON';
+        btn.classList.add('btn-active');
+      } else {
+        btn.innerText = 'Bouncy Walls: OFF';
+        btn.classList.remove('btn-active');
+      }
+    }
 
     // Launch Handler: Supports mouse click and touch inputs on Chromebooks
     function handleLaunch(e) {
@@ -176,12 +218,12 @@
         y: y,
         vx: vx,
         vy: vy,
-        radius: 4,
+        radius: 5,
         trail: [{
           x: x,
           y: y,
-          symbol: MUSIC_NOTES[0]
-        }], // Stores history of music note objects {x, y, symbol}
+          symbol: SPOOKY_SYMBOLS[0]
+        }], // Stores history of spooky objects {x, y, symbol}
         lastNoteX: x,
         lastNoteY: y,
         noteIndex: 0
@@ -195,14 +237,6 @@
     function updatePhysics() {
       for (let i = balls.length - 1; i >= 0; i--) {
         const b = balls[i];
-
-        // Remove ball if it travels too far off-screen (prevents memory leak)
-        const margin = 500;
-        if (b.x < -margin || b.x > canvas.width + margin || 
-            b.y < -margin || b.y > canvas.height + margin) {
-          balls.splice(i, 1);
-          continue;
-        }
 
         // Distance vector to central gravity node
         const dx = centralNode.x - b.x;
@@ -229,16 +263,43 @@
         b.x += b.vx;
         b.y += b.vy;
 
-        // Calculate distance moved since last music note was dropped
+        // Bouncy Walls collision logic vs Off-screen removal
+        if (bouncyWalls) {
+          if (b.x - b.radius <= 0) {
+            b.x = b.radius;
+            b.vx = Math.abs(b.vx);
+          } else if (b.x + b.radius >= canvas.width) {
+            b.x = canvas.width - b.radius;
+            b.vx = -Math.abs(b.vx);
+          }
+
+          if (b.y - b.radius <= 0) {
+            b.y = b.radius;
+            b.vy = Math.abs(b.vy);
+          } else if (b.y + b.radius >= canvas.height) {
+            b.y = canvas.height - b.radius;
+            b.vy = -Math.abs(b.vy);
+          }
+        } else {
+          // Remove ball if it travels too far off-screen (prevents memory leak)
+          const margin = 500;
+          if (b.x < -margin || b.x > canvas.width + margin || 
+              b.y < -margin || b.y > canvas.height + margin) {
+            balls.splice(i, 1);
+            continue;
+          }
+        }
+
+        // Calculate distance moved since last symbol was dropped
         const distSinceLastNote = Math.hypot(b.x - b.lastNoteX, b.y - b.lastNoteY);
 
-        // Drop a new musical note when distance threshold is reached
+        // Drop a new spooky symbol when distance threshold is reached
         if (distSinceLastNote >= NOTE_SPACING) {
-          b.noteIndex = (b.noteIndex + 1) % MUSIC_NOTES.length;
+          b.noteIndex = (b.noteIndex + 1) % SPOOKY_SYMBOLS.length;
           b.trail.push({
             x: b.x,
             y: b.y,
-            symbol: MUSIC_NOTES[b.noteIndex]
+            symbol: SPOOKY_SYMBOLS[b.noteIndex]
           });
 
           b.lastNoteX = b.x;
@@ -252,42 +313,52 @@
     }
 
     function draw() {
-      // Clear canvas background
-      ctx.fillStyle = '#000000';
+      // Clear canvas with deep Halloween purple background
+      ctx.fillStyle = '#120024';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // 1. Draw Central Mass Node
+      // 1. Draw Central Gravity Mass (Glowing Pumpkin Node)
+      ctx.save();
+      ctx.shadowColor = '#ff7518';
+      ctx.shadowBlur = 15;
+      
+      // Central orange glow circle
       ctx.beginPath();
       ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = '#ff7518';
       ctx.fill();
+      ctx.restore();
 
-      // Center mark on node
-      ctx.beginPath();
-      ctx.arc(centralNode.x, centralNode.y, 2, 0, Math.PI * 2);
-      ctx.fillStyle = '#000000';
-      ctx.fill();
+      // Pumpkin icon center mark
+      ctx.fillStyle = '#120024';
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🎃', centralNode.x, centralNode.y);
 
-      // 2. Draw Ball & Musical Note Trail
+      // 2. Draw Balls & Spooky Trails
       for (const b of balls) {
-        // Draw music notes behind the ball
+        // Draw spooky symbols behind the ball
         for (let t = 0; t < b.trail.length; t++) {
           const note = b.trail[t];
-          // Calculate opacity fade based on position in trail history (older = fainter)
           const alpha = (t + 1) / b.trail.length;
           
-          ctx.font = '16px "Courier New", monospace, sans-serif';
+          ctx.font = '14px "Courier New", monospace, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillStyle = `rgba(255, 255, 255, ${alpha.toFixed(2)})`;
+          ctx.fillStyle = `rgba(255, 183, 3, ${alpha.toFixed(2)})`;
           ctx.fillText(note.symbol, note.x, note.y);
         }
 
-        // Draw active ball object
+        // Draw active ball object with neon green glow
+        ctx.save();
+        ctx.shadowColor = '#39ff14';
+        ctx.shadowBlur = 8;
         ctx.beginPath();
         ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = '#39ff14';
         ctx.fill();
+        ctx.restore();
       }
     }
 
