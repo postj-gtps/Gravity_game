@@ -109,7 +109,7 @@
  </div>
 
  <div class="instructions">
-   Tap or click anywhere to launch a fleet of 5 randomized rockets! (Max 1 launch per second)
+   Click & Drag to aim & set power, then release to launch 360° rocket bursts! (Max 1 launch per sec)
  </div>
 
  <script>
@@ -118,10 +118,7 @@
 
  // SIMULATION CONSTANTS
  const GRAVITY_CONSTANT = 1800; // Strength of gravitational pull (G)
- const LAUNCH_VELOCITY = 5; // Fixed velocity on click
- const FIXED_LAUNCH_ANGLE = 90; // Base direction in degrees (90° = straight right)
- const TRAIL_LENGTH = 300; // Number of historic trail points stored
- const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
+ const SOFTENING_FACTOR = 400;  // Prevents infinite velocity near center
  const LAUNCH_COOLDOWN_MS = 1000; // Spam-click filter (1 second delay)
 
  // STATE VARIABLES
@@ -129,8 +126,15 @@
  let stars = [];
  let nebulas = [];
  let planets = [];
- let particles = [];
+ let asteroids = [];
+ let explosionParticles = [];
+ let fireParticles = [];
  let lastLaunchTime = 0;
+
+ // Slingshot Drag Control State
+ let isDragging = false;
+ let dragStart = { x: 0, y: 0 };
+ let dragCurrent = { x: 0, y: 0 };
 
  // Central Gravity Node Definition (Yellow Sun)
  const centralNode = {
@@ -140,7 +144,7 @@
  };
 
  function generateSpaceBackground() {
-   // Generate starfield
+   // Starfield
    stars = [];
    const starCount = Math.floor((canvas.width * canvas.height) / 2500);
    for (let i = 0; i < starCount; i++) {
@@ -153,15 +157,14 @@
      });
    }
 
-   // Generate soft, colorful background nebulas
+   // Nebulas
    nebulas = [
      { x: canvas.width * 0.15, y: canvas.height * 0.25, radius: Math.max(canvas.width, canvas.height) * 0.4, color: 'rgba(150, 30, 220, 0.28)' },
      { x: canvas.width * 0.85, y: canvas.height * 0.75, radius: Math.max(canvas.width, canvas.height) * 0.45, color: 'rgba(0, 180, 216, 0.25)' },
-     { x: canvas.width * 0.5, y: canvas.height * 0.85, radius: Math.max(canvas.width, canvas.height) * 0.35, color: 'rgba(247, 37, 133, 0.22)' },
-     { x: canvas.width * 0.8, y: canvas.height * 0.2, radius: Math.max(canvas.width, canvas.height) * 0.3, color: 'rgba(114, 9, 183, 0.25)' }
+     { x: canvas.width * 0.5, y: canvas.height * 0.85, radius: Math.max(canvas.width, canvas.height) * 0.35, color: 'rgba(247, 37, 133, 0.22)' }
    ];
 
-   // Generate colorful background planets
+   // Planets
    planets = [
      {
        x: canvas.width * 0.15,
@@ -179,16 +182,43 @@
        color1: '#ff4d6d',
        color2: '#800f2f',
        hasRing: false
-     },
-     {
-       x: canvas.width * 0.28,
-       y: canvas.height * 0.18,
-       radius: 15,
-       color1: '#52b788',
-       color2: '#1b4332',
-       hasRing: false
      }
    ];
+
+   // Asteroids
+   generateAsteroids();
+ }
+
+ function generateAsteroids() {
+   asteroids = [];
+   const count = 5;
+   for (let i = 0; i < count; i++) {
+     // Spawn asteroids away from central sun
+     let ax, ay;
+     do {
+       ax = Math.random() * canvas.width;
+       ay = Math.random() * canvas.height;
+     } while (Math.hypot(ax - centralNode.x, ay - centralNode.y) < 160);
+
+     const radius = Math.random() * 14 + 16;
+     const vertCount = Math.floor(Math.random() * 4) + 7;
+     const vertOffsets = [];
+     for (let v = 0; v < vertCount; v++) {
+       vertOffsets.push(0.8 + Math.random() * 0.4);
+     }
+
+     asteroids.push({
+       x: ax,
+       y: ay,
+       vx: (Math.random() - 0.5) * 1.2,
+       vy: (Math.random() - 0.5) * 1.2,
+       radius: radius,
+       angle: Math.random() * Math.PI * 2,
+       spin: (Math.random() - 0.5) * 0.03,
+       vertCount: vertCount,
+       vertOffsets: vertOffsets
+     });
+   }
  }
 
  function resizeCanvas() {
@@ -196,7 +226,6 @@
    canvas.width = wrapper.clientWidth;
    canvas.height = wrapper.clientHeight;
    
-   // Recenter central Sun dynamically
    centralNode.x = canvas.width / 2;
    centralNode.y = canvas.height / 2;
 
@@ -206,35 +235,57 @@
  window.addEventListener('resize', resizeCanvas);
  resizeCanvas();
 
- // Touch & Click Handler with Spam-Click Filter
+ // SLINGSHOT POINTER EVENTS
  canvas.addEventListener('pointerdown', (e) => {
    const now = Date.now();
    if (now - lastLaunchTime < LAUNCH_COOLDOWN_MS) {
-     return; // Spam filter: ignore clicks within 1 second of last launch
+     return; // Spam filter cooldown active
    }
-   lastLaunchTime = now;
 
    const rect = canvas.getBoundingClientRect();
-   const clickX = e.clientX - rect.left;
-   const clickY = e.clientY - rect.top;
-
-   launchShips(clickX, clickY);
+   dragStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+   dragCurrent = { ...dragStart };
+   isDragging = true;
+   canvas.setPointerCapture(e.pointerId);
  });
 
- function launchShips(x, y) {
-   const shipCount = 5;
-   const totalSpreadDeg = 30; // 30-degree total spread
-   const startAngle = FIXED_LAUNCH_ANGLE - (totalSpreadDeg / 2); // Start at 75°
-   const angleStep = totalSpreadDeg / (shipCount - 1); // 7.5° increments
+ canvas.addEventListener('pointermove', (e) => {
+   if (!isDragging) return;
+   const rect = canvas.getBoundingClientRect();
+   dragCurrent = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+ });
 
-   // Colors for individual ships in the fleet
+ canvas.addEventListener('pointerup', (e) => {
+   if (!isDragging) return;
+   isDragging = false;
+
+   const now = Date.now();
+   if (now - lastLaunchTime < LAUNCH_COOLDOWN_MS) return;
+
+   // Slingshot Pull Vector (Dragging backward launches forward)
+   const dx = dragStart.x - dragCurrent.x;
+   const dy = dragStart.y - dragCurrent.y;
+   const dragDistance = Math.hypot(dx, dy);
+
+   if (dragDistance > 6) {
+     const baseSpeed = Math.min(dragDistance * 0.07, 12); // Speed scales with pull distance
+     const baseAngle = Math.atan2(dy, dx);
+     launchShips360(dragStart.x, dragStart.y, baseAngle, baseSpeed);
+     lastLaunchTime = now;
+   }
+ });
+
+ canvas.addEventListener('pointercancel', () => { isDragging = false; });
+
+ function launchShips360(x, y, baseAngle, launchSpeed) {
+   const shipCount = 5;
+   const angleStep = (Math.PI * 2) / shipCount; // 360 degrees spread evenly
    const colors = ['#00e5ff', '#ff3366', '#76ff03', '#ffea00', '#d500f9'];
 
    for (let i = 0; i < shipCount; i++) {
-     const currentAngleDeg = startAngle + (i * angleStep);
-     const rad = (currentAngleDeg * Math.PI) / 180;
-     const vx = LAUNCH_VELOCITY * Math.sin(rad);
-     const vy = -LAUNCH_VELOCITY * Math.cos(rad);
+     const currentAngle = baseAngle + (i * angleStep);
+     const vx = launchSpeed * Math.cos(currentAngle);
+     const vy = launchSpeed * Math.sin(currentAngle);
 
      ships.push({
        x: x,
@@ -243,8 +294,7 @@
        vy: vy,
        radius: 6,
        color: colors[i % colors.length],
-       designType: Math.floor(Math.random() * 4), // Randomly pick 1 of 4 designs
-       trail: []
+       designType: Math.floor(Math.random() * 4) // Pick 1 of 4 rocket designs
      });
    }
  }
@@ -254,7 +304,7 @@
    for (let i = 0; i < particleCount; i++) {
      const angle = Math.random() * Math.PI * 2;
      const speed = Math.random() * 4.5 + 1;
-     particles.push({
+     explosionParticles.push({
        x: x,
        y: y,
        vx: Math.cos(angle) * speed,
@@ -268,15 +318,48 @@
    }
  }
 
+ function triggerBounceSparks(x, y, nx, ny) {
+   for (let i = 0; i < 8; i++) {
+     const spreadAngle = Math.atan2(ny, nx) + (Math.random() - 0.5);
+     const speed = Math.random() * 3 + 1;
+     explosionParticles.push({
+       x: x,
+       y: y,
+       vx: Math.cos(spreadAngle) * speed,
+       vy: Math.sin(spreadAngle) * speed,
+       radius: Math.random() * 2 + 1,
+       color: '#ffea00',
+       alpha: 1.0,
+       life: 0,
+       maxLife: 12
+     });
+   }
+ }
+
  function resetSimulation() {
    ships = [];
-   particles = [];
+   explosionParticles = [];
+   fireParticles = [];
+   generateAsteroids();
  }
 
  function updatePhysics() {
-   // Update explosion particles
-   for (let i = particles.length - 1; i >= 0; i--) {
-     const p = particles[i];
+   // Update Asteroids
+   for (const ast of asteroids) {
+     ast.x += ast.vx;
+     ast.y += ast.vy;
+     ast.angle += ast.spin;
+
+     // Screen wrap
+     if (ast.x < -ast.radius) ast.x = canvas.width + ast.radius;
+     if (ast.x > canvas.width + ast.radius) ast.x = -ast.radius;
+     if (ast.y < -ast.radius) ast.y = canvas.height + ast.radius;
+     if (ast.y > canvas.height + ast.radius) ast.y = -ast.radius;
+   }
+
+   // Update Explosion Particles
+   for (let i = explosionParticles.length - 1; i >= 0; i--) {
+     const p = explosionParticles[i];
      p.x += p.vx;
      p.y += p.vy;
      p.vx *= 0.96;
@@ -285,15 +368,29 @@
      p.alpha = 1 - (p.life / p.maxLife);
 
      if (p.life >= p.maxLife) {
-       particles.splice(i, 1);
+       explosionParticles.splice(i, 1);
      }
    }
 
-   // Update ships
+   // Update Fire Trail Particles
+   for (let i = fireParticles.length - 1; i >= 0; i--) {
+     const fp = fireParticles[i];
+     fp.x += fp.vx;
+     fp.y += fp.vy;
+     fp.radius *= 0.92;
+     fp.life++;
+     fp.alpha = 1 - (fp.life / fp.maxLife);
+
+     if (fp.life >= fp.maxLife || fp.radius < 0.3) {
+       fireParticles.splice(i, 1);
+     }
+   }
+
+   // Update Rockets
    for (let i = ships.length - 1; i >= 0; i--) {
      const s = ships[i];
 
-     // Remove ship if it travels too far off-screen
+     // Remove if too far off screen
      const margin = 500;
      if (s.x < -margin || s.x > canvas.width + margin || 
          s.y < -margin || s.y > canvas.height + margin) {
@@ -307,40 +404,74 @@
      const distSq = dx * dx + dy * dy;
      const dist = Math.sqrt(distSq);
 
-     // Collision check: rocket hits the sun
+     // Sun Collision check
      if (dist < centralNode.radius + s.radius) {
        triggerExplosion(s.x, s.y, s.color);
        ships.splice(i, 1);
        continue;
      }
 
-     // Inverse square law gravity acceleration
+     // Asteroid Collisions (Bounce physics)
+     for (const ast of asteroids) {
+       const adx = s.x - ast.x;
+       const ady = s.y - ast.y;
+       const adist = Math.hypot(adx, ady);
+       const minDist = s.radius + ast.radius;
+
+       if (adist < minDist && adist > 0) {
+         // Collision normal vector
+         const nx = adx / adist;
+         const ny = ady / adist;
+
+         // Dot product velocity reflection
+         const dot = s.vx * nx + s.vy * ny;
+         if (dot < 0) {
+           s.vx = s.vx - 2 * dot * nx;
+           s.vy = s.vy - 2 * dot * ny;
+
+           // Reposition out of asteroid radius to avoid clipping
+           s.x = ast.x + nx * (minDist + 1);
+           s.y = ast.y + ny * (minDist + 1);
+
+           triggerBounceSparks(s.x, s.y, nx, ny);
+         }
+       }
+     }
+
+     // Gravity acceleration
      const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
+     s.vx += acceleration * (dx / dist);
+     s.vy += acceleration * (dy / dist);
 
-     // Acceleration vector components
-     const ax = acceleration * (dx / dist);
-     const ay = acceleration * (dy / dist);
-
-     // Update velocity and position
-     s.vx += ax;
-     s.vy += ay;
      s.x += s.vx;
      s.y += s.vy;
 
-     // Record position history for orbit trails
-     s.trail.push({ x: s.x, y: s.y });
-     if (s.trail.length > TRAIL_LENGTH) {
-       s.trail.shift();
+     // Spawn Fire Particles for Thruster Trail
+     const shipAngle = Math.atan2(s.vy, s.vx);
+     const tailX = s.x - Math.cos(shipAngle) * 8;
+     const tailY = s.y - Math.sin(shipAngle) * 8;
+
+     for (let f = 0; f < 2; f++) {
+       fireParticles.push({
+         x: tailX + (Math.random() - 0.5) * 3,
+         y: tailY + (Math.random() - 0.5) * 3,
+         vx: -s.vx * 0.15 + (Math.random() - 0.5) * 0.8,
+         vy: -s.vy * 0.15 + (Math.random() - 0.5) * 0.8,
+         radius: Math.random() * 3.5 + 2,
+         color: ['#ff4400', '#ff8800', '#ffea00', '#ffffff'][Math.floor(Math.random() * 4)],
+         alpha: 1.0,
+         life: 0,
+         maxLife: Math.floor(Math.random() * 12 + 10)
+       });
      }
    }
  }
 
  function drawBackground() {
-   // Space fill
    ctx.fillStyle = '#050512';
    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-   // Draw background nebulas
+   // Nebulas
    for (const neb of nebulas) {
      const grad = ctx.createRadialGradient(neb.x, neb.y, 0, neb.x, neb.y, neb.radius);
      grad.addColorStop(0, neb.color);
@@ -349,11 +480,9 @@
      ctx.fillRect(0, 0, canvas.width, canvas.height);
    }
 
-   // Draw background planets
+   // Planets
    for (const p of planets) {
      ctx.save();
-     
-     // Optional planetary ring (drawn behind body)
      if (p.hasRing) {
        ctx.save();
        ctx.translate(p.x, p.y);
@@ -367,7 +496,6 @@
        ctx.restore();
      }
 
-     // Planet body with 3D gradient lighting
      const planetGrad = ctx.createRadialGradient(
        p.x - p.radius * 0.3, p.y - p.radius * 0.3, p.radius * 0.1,
        p.x, p.y, p.radius
@@ -379,11 +507,10 @@
      ctx.beginPath();
      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
      ctx.fill();
-
      ctx.restore();
    }
 
-   // Draw starfield
+   // Stars
    for (const star of stars) {
      ctx.save();
      ctx.globalAlpha = star.alpha;
@@ -395,8 +522,34 @@
    }
  }
 
+ function drawAsteroids() {
+   for (const ast of asteroids) {
+     ctx.save();
+     ctx.translate(ast.x, ast.y);
+     ctx.rotate(ast.angle);
+
+     ctx.beginPath();
+     for (let i = 0; i < ast.vertCount; i++) {
+       const a = (i * Math.PI * 2) / ast.vertCount;
+       const r = ast.radius * ast.vertOffsets[i];
+       const vx = Math.cos(a) * r;
+       const vy = Math.sin(a) * r;
+       if (i === 0) ctx.moveTo(vx, vy);
+       else ctx.lineTo(vx, vy);
+     }
+     ctx.closePath();
+
+     ctx.fillStyle = '#3a3a4d';
+     ctx.fill();
+     ctx.lineWidth = 2;
+     ctx.strokeStyle = '#686882';
+     ctx.stroke();
+
+     ctx.restore();
+   }
+ }
+
  function drawSun() {
-   // Outer corona radial glow
    const sunGlow = ctx.createRadialGradient(
      centralNode.x, centralNode.y, centralNode.radius * 0.5,
      centralNode.x, centralNode.y, centralNode.radius * 3.5
@@ -410,7 +563,6 @@
    ctx.arc(centralNode.x, centralNode.y, centralNode.radius * 3.5, 0, Math.PI * 2);
    ctx.fill();
 
-   // Yellow Sun Core
    const sunBody = ctx.createRadialGradient(
      centralNode.x - centralNode.radius * 0.3, centralNode.y - centralNode.radius * 0.3, 2,
      centralNode.x, centralNode.y, centralNode.radius
@@ -434,15 +586,7 @@
    ctx.rotate(angle);
 
    switch (s.designType) {
-     case 0:
-       // DESIGN 0: Classic Rocket
-       ctx.fillStyle = '#ff4400';
-       ctx.beginPath();
-       ctx.moveTo(-8, -3);
-       ctx.lineTo(-14 - Math.random() * 5, 0);
-       ctx.lineTo(-8, 3);
-       ctx.fill();
-
+     case 0: // Classic Rocket
        ctx.fillStyle = s.color;
        ctx.beginPath();
        ctx.moveTo(11, 0);
@@ -465,16 +609,7 @@
        ctx.fill();
        break;
 
-     case 1:
-       // DESIGN 1: Flying Saucer / UFO
-       ctx.fillStyle = '#00ffff';
-       ctx.beginPath();
-       ctx.moveTo(-4, 0);
-       ctx.lineTo(-10 - Math.random() * 4, 0);
-       ctx.lineWidth = 2;
-       ctx.strokeStyle = '#00ffff';
-       ctx.stroke();
-
+     case 1: // Flying Saucer
        ctx.fillStyle = s.color;
        ctx.beginPath();
        ctx.ellipse(0, 0, 10, 5, 0, 0, Math.PI * 2);
@@ -484,27 +619,9 @@
        ctx.beginPath();
        ctx.arc(0, -2, 4, Math.PI, 0);
        ctx.fill();
-
-       ctx.fillStyle = '#ffff00';
-       ctx.beginPath();
-       ctx.arc(-5, 2, 1, 0, Math.PI * 2);
-       ctx.arc(0, 3, 1, 0, Math.PI * 2);
-       ctx.arc(5, 2, 1, 0, Math.PI * 2);
-       ctx.fill();
        break;
 
-     case 2:
-       // DESIGN 2: Delta Arrow Fighter
-       ctx.fillStyle = '#ff2200';
-       ctx.beginPath();
-       ctx.moveTo(-6, -4);
-       ctx.lineTo(-12 - Math.random() * 4, -4);
-       ctx.moveTo(-6, 4);
-       ctx.lineTo(-12 - Math.random() * 4, 4);
-       ctx.lineWidth = 2;
-       ctx.strokeStyle = '#ff2200';
-       ctx.stroke();
-
+     case 2: // Delta Fighter
        ctx.fillStyle = s.color;
        ctx.beginPath();
        ctx.moveTo(12, 0);
@@ -523,16 +640,7 @@
        ctx.fill();
        break;
 
-     case 3:
-       // DESIGN 3: Heavy Capsule Shuttle
-       ctx.fillStyle = '#ffaa00';
-       ctx.beginPath();
-       ctx.moveTo(-7, 0);
-       ctx.lineTo(-14 - Math.random() * 5, 0);
-       ctx.lineWidth = 3;
-       ctx.strokeStyle = '#ffaa00';
-       ctx.stroke();
-
+     case 3: // Heavy Capsule Shuttle
        ctx.fillStyle = s.color;
        ctx.beginPath();
        ctx.roundRect(-7, -5, 14, 10, 3);
@@ -549,8 +657,20 @@
    ctx.restore();
  }
 
- function drawParticles() {
-   for (const p of particles) {
+ function drawFireParticles() {
+   for (const fp of fireParticles) {
+     ctx.save();
+     ctx.globalAlpha = Math.max(0, fp.alpha);
+     ctx.fillStyle = fp.color;
+     ctx.beginPath();
+     ctx.arc(fp.x, fp.y, fp.radius, 0, Math.PI * 2);
+     ctx.fill();
+     ctx.restore();
+   }
+ }
+
+ function drawExplosionParticles() {
+   for (const p of explosionParticles) {
      ctx.save();
      ctx.globalAlpha = Math.max(0, p.alpha);
      ctx.fillStyle = p.color;
@@ -561,30 +681,66 @@
    }
  }
 
+ function drawSlingshotUI() {
+   if (!isDragging) return;
+
+   const dx = dragStart.x - dragCurrent.x;
+   const dy = dragStart.y - dragCurrent.y;
+   const dist = Math.hypot(dx, dy);
+
+   if (dist < 5) return;
+
+   // Elastic Band Line
+   ctx.save();
+   ctx.beginPath();
+   ctx.moveTo(dragStart.x, dragStart.y);
+   ctx.lineTo(dragCurrent.x, dragCurrent.y);
+   ctx.strokeStyle = '#ffd700';
+   ctx.lineWidth = 2;
+   ctx.setLineDash([4, 4]);
+   ctx.stroke();
+
+   // Slingshot Origin Anchor Pin
+   ctx.beginPath();
+   ctx.arc(dragStart.x, dragStart.y, 6, 0, Math.PI * 2);
+   ctx.fillStyle = '#ffd700';
+   ctx.fill();
+
+   // Aim Indicator Line (Forward Trajectory)
+   const angle = Math.atan2(dy, dx);
+   const aimLength = Math.min(dist, 100);
+   const aimX = dragStart.x + Math.cos(angle) * aimLength;
+   const aimY = dragStart.y + Math.sin(angle) * aimLength;
+
+   ctx.beginPath();
+   ctx.moveTo(dragStart.x, dragStart.y);
+   ctx.lineTo(aimX, aimY);
+   ctx.strokeStyle = 'rgba(0, 229, 255, 0.8)';
+   ctx.lineWidth = 3;
+   ctx.setLineDash([]);
+   ctx.stroke();
+
+   ctx.restore();
+ }
+
  function draw() {
    drawBackground();
+   drawAsteroids();
    drawSun();
 
-   // Draw Rocket Trails & Ships
-   for (const s of ships) {
-     if (s.trail.length > 1) {
-       ctx.beginPath();
-       ctx.moveTo(s.trail[0].x, s.trail[0].y);
-       for (let t = 1; t < s.trail.length; t++) {
-         ctx.lineTo(s.trail[t].x, s.trail[t].y);
-       }
-       ctx.strokeStyle = s.color;
-       ctx.globalAlpha = 0.45;
-       ctx.lineWidth = 1.5;
-       ctx.stroke();
-       ctx.globalAlpha = 1.0;
-     }
+   // Draw Thruster Fire Particles
+   drawFireParticles();
 
+   // Draw Rockets
+   for (const s of ships) {
      drawRocket(s);
    }
 
-   // Draw Sun Collision Explosion Particles
-   drawParticles();
+   // Draw Sun & Asteroid Bounce Sparks
+   drawExplosionParticles();
+
+   // Draw Active Slingshot UI Preview
+   drawSlingshotUI();
  }
 
  function animate() {
