@@ -109,7 +109,7 @@
  </div>
 
  <div class="instructions">
-   Tap or click anywhere to launch rockets! (Max 20 ships — watch them bounce off planets!)
+   Tap or click anywhere on the canvas to launch a fleet of 5 rocket ships!
  </div>
 
  <script>
@@ -122,13 +122,11 @@
  const FIXED_LAUNCH_ANGLE = 90; // Base direction in degrees (90° = straight right)
  const TRAIL_LENGTH = 300; // Number of historic trail points stored
  const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
- const MAX_SHIPS = 20; // Upper limit of active rocketships
 
  // STATE VARIABLES
  let ships = [];
  let stars = [];
  let nebulas = [];
- let planets = [];
 
  // Central Gravity Node Definition (Yellow Sun)
  const centralNode = {
@@ -159,59 +157,6 @@
    ];
  }
 
- function generatePlanets() {
-   planets = [];
-   const planetCount = 4; // Number of planets to scatter
-   const planetStyles = [
-     { main: '#33ffaa', shadow: '#007744', name: 'Emerald' },
-     { main: '#ff9933', shadow: '#883300', ring: true },
-     { main: '#ff55aa', shadow: '#880044', ring: false },
-     { main: '#33ccff', shadow: '#0055aa', ring: true }
-   ];
-
-   for (let i = 0; i < planetCount; i++) {
-     let px, py, distToSun;
-     let isValidPosition = false;
-     let attempts = 0;
-     const radius = 16 + Math.random() * 12; // Radius between 16 and 28
-
-     // Place planets safely away from the center Sun and canvas borders
-     while (!isValidPosition && attempts < 100) {
-       px = 80 + Math.random() * (canvas.width - 160);
-       py = 80 + Math.random() * (canvas.height - 160);
-
-       const dx = px - centralNode.x;
-       const dy = py - centralNode.y;
-       distToSun = Math.sqrt(dx * dx + dy * dy);
-
-       // Check safe distance from Sun (at least 130px away)
-       if (distToSun > 130) {
-         isValidPosition = true;
-         // Check overlapping with already created planets
-         for (const existing of planets) {
-           const edx = px - existing.x;
-           const edy = py - existing.y;
-           if (Math.sqrt(edx * edx + edy * edy) < radius + existing.radius + 50) {
-             isValidPosition = false;
-             break;
-           }
-         }
-       }
-       attempts++;
-     }
-
-     const style = planetStyles[i % planetStyles.length];
-     planets.push({
-       x: px,
-       y: py,
-       radius: radius,
-       mainColor: style.main,
-       shadowColor: style.shadow,
-       hasRing: style.ring || false
-     });
-   }
- }
-
  function resizeCanvas() {
    const wrapper = document.getElementById('canvas-wrapper');
    canvas.width = wrapper.clientWidth;
@@ -222,13 +167,12 @@
    centralNode.y = canvas.height / 2;
 
    generateSpaceBackground();
-   generatePlanets();
  }
 
  window.addEventListener('resize', resizeCanvas);
  resizeCanvas();
 
- // Touch & Click Handler: Launch ships in a spread
+ // Touch & Click Handler: Launch 5 ships in a 30-degree spread
  canvas.addEventListener('pointerdown', (e) => {
    const rect = canvas.getBoundingClientRect();
    const clickX = e.clientX - rect.left;
@@ -240,9 +184,10 @@
  function launchShips(x, y) {
    const shipCount = 5;
    const totalSpreadDeg = 30; // 30-degree total spread
-   const startAngle = FIXED_LAUNCH_ANGLE - (totalSpreadDeg / 2); 
-   const angleStep = totalSpreadDeg / (shipCount - 1); 
+   const startAngle = FIXED_LAUNCH_ANGLE - (totalSpreadDeg / 2); // Start at 75°
+   const angleStep = totalSpreadDeg / (shipCount - 1); // 7.5° increments
 
+   // Colors for individual ships in the fleet
    const colors = ['#00e5ff', '#ff3366', '#76ff03', '#ffea00', '#d500f9'];
 
    for (let i = 0; i < shipCount; i++) {
@@ -261,16 +206,10 @@
        trail: []
      });
    }
-
-   // Maintain maximum limit of 20 rocketships (removes oldest)
-   while (ships.length > MAX_SHIPS) {
-     ships.shift();
-   }
  }
 
  function resetSimulation() {
    ships = [];
-   generatePlanets();
  }
 
  function updatePhysics() {
@@ -297,35 +236,7 @@
        continue;
      }
 
-     // Planet Collision Check & Bounce Math
-     for (const p of planets) {
-       const pdx = s.x - p.x;
-       const pdy = s.y - p.y;
-       const pDist = Math.sqrt(pdx * pdx + pdy * pdy);
-
-       if (pDist < p.radius + s.radius) {
-         // Collision normal vector
-         const nx = pdx / pDist;
-         const ny = pdy / pDist;
-
-         // Vector dot product of velocity and normal
-         const dotProduct = s.vx * nx + s.vy * ny;
-
-         // Only bounce if moving towards planet center
-         if (dotProduct < 0) {
-           const bounceDamping = 0.9; // Keeps 90% velocity after bouncing
-           s.vx = (s.vx - 2 * dotProduct * nx) * bounceDamping;
-           s.vy = (s.vy - 2 * dotProduct * ny) * bounceDamping;
-         }
-
-         // Reposition rocket outside planet radius to prevent clipping
-         const overlap = (p.radius + s.radius) - pDist;
-         s.x += nx * overlap;
-         s.y += ny * overlap;
-       }
-     }
-
-     // Inverse square law gravity acceleration from Sun
+     // Inverse square law gravity acceleration
      const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
 
      // Acceleration vector components
@@ -403,41 +314,6 @@
    ctx.fill();
  }
 
- function drawPlanets() {
-   for (const p of planets) {
-     ctx.save();
-
-     // Optional Planetary Ring (drawn behind)
-     if (p.hasRing) {
-       ctx.save();
-       ctx.translate(p.x, p.y);
-       ctx.rotate(-Math.PI / 6);
-       ctx.beginPath();
-       ctx.ellipse(0, 0, p.radius * 1.8, p.radius * 0.4, 0, 0, Math.PI * 2);
-       ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-       ctx.lineWidth = 3;
-       ctx.stroke();
-       ctx.restore();
-     }
-
-     // Planet Gradient
-     const pGrad = ctx.createRadialGradient(
-       p.x - p.radius * 0.3, p.y - p.radius * 0.3, p.radius * 0.1,
-       p.x, p.y, p.radius
-     );
-     pGrad.addColorStop(0, '#ffffff');
-     pGrad.addColorStop(0.35, p.mainColor);
-     pGrad.addColorStop(1, p.shadowColor);
-
-     ctx.fillStyle = pGrad;
-     ctx.beginPath();
-     ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-     ctx.fill();
-
-     ctx.restore();
-   }
- }
-
  function drawRocket(s) {
    // Rotate rocket toward direction of movement
    const angle = Math.atan2(s.vy, s.vx);
@@ -493,7 +369,6 @@
 
  function draw() {
    drawBackground();
-   drawPlanets();
    drawSun();
 
    // Draw Ships & Trails

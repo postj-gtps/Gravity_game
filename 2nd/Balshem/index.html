@@ -92,6 +92,19 @@
    font-size: 12px;
    color: #aaaacc;
    text-align: center;
+   font-weight: bold;
+ }
+
+ .status-ready {
+   color: #76ff03;
+ }
+
+ .status-cooldown {
+   color: #ff9900;
+ }
+
+ .status-paused {
+   color: #ff3366;
  }
  </style>
 </head>
@@ -108,13 +121,14 @@
    <canvas id="simCanvas"></canvas>
  </div>
 
- <div class="instructions">
-   Tap or click anywhere to launch rockets! (Max 20 ships — watch them bounce off planets!)
+ <div class="instructions" id="status-text">
+   Status: <span class="status-ready">READY TO LAUNCH</span> | Press [SPACE] to Pause
  </div>
 
  <script>
  const canvas = document.getElementById('simCanvas');
  const ctx = canvas.getContext('2d');
+ const statusText = document.getElementById('status-text');
 
  // SIMULATION CONSTANTS
  const GRAVITY_CONSTANT = 1800; // Strength of gravitational pull (G)
@@ -123,12 +137,17 @@
  const TRAIL_LENGTH = 300; // Number of historic trail points stored
  const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
  const MAX_SHIPS = 20; // Upper limit of active rocketships
+ const LAUNCH_COOLDOWN_MS = 2000; // 2-second rate limit between launches
 
  // STATE VARIABLES
  let ships = [];
  let stars = [];
  let nebulas = [];
  let planets = [];
+ let asteroids = [];
+ let particles = []; // Explosion particle effects
+ let lastLaunchTime = 0;
+ let isPaused = false;
 
  // Central Gravity Node Definition (Yellow Sun)
  const centralNode = {
@@ -138,7 +157,6 @@
  };
 
  function generateSpaceBackground() {
-   // Generate starfield
    stars = [];
    const starCount = Math.floor((canvas.width * canvas.height) / 3000);
    for (let i = 0; i < starCount; i++) {
@@ -151,7 +169,6 @@
      });
    }
 
-   // Generate soft background nebulas
    nebulas = [
      { x: canvas.width * 0.2, y: canvas.height * 0.3, radius: Math.max(canvas.width, canvas.height) * 0.35, color: 'rgba(120, 40, 200, 0.22)' },
      { x: canvas.width * 0.8, y: canvas.height * 0.7, radius: Math.max(canvas.width, canvas.height) * 0.4, color: 'rgba(30, 100, 220, 0.22)' },
@@ -161,9 +178,9 @@
 
  function generatePlanets() {
    planets = [];
-   const planetCount = 4; // Number of planets to scatter
+   const planetCount = 4;
    const planetStyles = [
-     { main: '#33ffaa', shadow: '#007744', name: 'Emerald' },
+     { main: '#33ffaa', shadow: '#007744' },
      { main: '#ff9933', shadow: '#883300', ring: true },
      { main: '#ff55aa', shadow: '#880044', ring: false },
      { main: '#33ccff', shadow: '#0055aa', ring: true }
@@ -173,9 +190,8 @@
      let px, py, distToSun;
      let isValidPosition = false;
      let attempts = 0;
-     const radius = 16 + Math.random() * 12; // Radius between 16 and 28
+     const radius = 16 + Math.random() * 12;
 
-     // Place planets safely away from the center Sun and canvas borders
      while (!isValidPosition && attempts < 100) {
        px = 80 + Math.random() * (canvas.width - 160);
        py = 80 + Math.random() * (canvas.height - 160);
@@ -184,10 +200,8 @@
        const dy = py - centralNode.y;
        distToSun = Math.sqrt(dx * dx + dy * dy);
 
-       // Check safe distance from Sun (at least 130px away)
        if (distToSun > 130) {
          isValidPosition = true;
-         // Check overlapping with already created planets
          for (const existing of planets) {
            const edx = px - existing.x;
            const edy = py - existing.y;
@@ -212,34 +226,79 @@
    }
  }
 
+ function generateAsteroids() {
+   asteroids = [];
+   const asteroidCount = 6;
+
+   for (let i = 0; i < asteroidCount; i++) {
+     const radius = 12 + Math.random() * 10;
+     
+     // Random jagged polygon points for unique asteroid shape
+     const points = [];
+     const numVerts = 7 + Math.floor(Math.random() * 4);
+     for (let v = 0; v < numVerts; v++) {
+       const angle = (v / numVerts) * Math.PI * 2;
+       const variance = 0.7 + Math.random() * 0.6;
+       points.push({ angle, rRatio: variance });
+     }
+
+     asteroids.push({
+       x: Math.random() * canvas.width,
+       y: Math.random() * canvas.height,
+       vx: (Math.random() - 0.5) * 1.5,
+       vy: (Math.random() - 0.5) * 1.5,
+       radius: radius,
+       rotation: Math.random() * Math.PI * 2,
+       rotSpeed: (Math.random() - 0.5) * 0.03,
+       points: points
+     });
+   }
+ }
+
  function resizeCanvas() {
    const wrapper = document.getElementById('canvas-wrapper');
    canvas.width = wrapper.clientWidth;
    canvas.height = wrapper.clientHeight;
    
-   // Recenter central Sun dynamically
    centralNode.x = canvas.width / 2;
    centralNode.y = canvas.height / 2;
 
    generateSpaceBackground();
    generatePlanets();
+   generateAsteroids();
  }
 
  window.addEventListener('resize', resizeCanvas);
  resizeCanvas();
 
- // Touch & Click Handler: Launch ships in a spread
+ // Pause Toggle Listener (Spacebar)
+ window.addEventListener('keydown', (e) => {
+   if (e.code === 'Space') {
+     e.preventDefault();
+     isPaused = !isPaused;
+   }
+ });
+
+ // Touch & Click Handler with Cooldown
  canvas.addEventListener('pointerdown', (e) => {
+   if (isPaused) return;
+
+   const now = Date.now();
+   if (now - lastLaunchTime < LAUNCH_COOLDOWN_MS) {
+     return;
+   }
+
    const rect = canvas.getBoundingClientRect();
    const clickX = e.clientX - rect.left;
    const clickY = e.clientY - rect.top;
 
    launchShips(clickX, clickY);
+   lastLaunchTime = now;
  });
 
  function launchShips(x, y) {
    const shipCount = 5;
-   const totalSpreadDeg = 30; // 30-degree total spread
+   const totalSpreadDeg = 30;
    const startAngle = FIXED_LAUNCH_ANGLE - (totalSpreadDeg / 2); 
    const angleStep = totalSpreadDeg / (shipCount - 1); 
 
@@ -262,22 +321,95 @@
      });
    }
 
-   // Maintain maximum limit of 20 rocketships (removes oldest)
    while (ships.length > MAX_SHIPS) {
      ships.shift();
    }
  }
 
+ function createExplosion(x, y, color) {
+   const particleCount = 20;
+   for (let i = 0; i < particleCount; i++) {
+     const angle = Math.random() * Math.PI * 2;
+     const speed = 1 + Math.random() * 4;
+     particles.push({
+       x: x,
+       y: y,
+       vx: Math.cos(angle) * speed,
+       vy: Math.sin(angle) * speed,
+       life: 1.0,
+       color: Math.random() > 0.5 ? '#ff4400' : (color || '#ffea00'),
+       size: 2 + Math.random() * 3
+     });
+   }
+ }
+
  function resetSimulation() {
    ships = [];
+   particles = [];
+   lastLaunchTime = 0;
    generatePlanets();
+   generateAsteroids();
  }
 
  function updatePhysics() {
+   // Update explosion particles
+   for (let i = particles.length - 1; i >= 0; i--) {
+     const p = particles[i];
+     p.x += p.vx;
+     p.y += p.vy;
+     p.life -= 0.03;
+     if (p.life <= 0) {
+       particles.splice(i, 1);
+     }
+   }
+
+   // Update asteroids position & screen wrap
+   for (const a of asteroids) {
+     a.x += a.vx;
+     a.y += a.vy;
+     a.rotation += a.rotSpeed;
+
+     if (a.x < -a.radius) a.x = canvas.width + a.radius;
+     if (a.x > canvas.width + a.radius) a.x = -a.radius;
+     if (a.y < -a.radius) a.y = canvas.height + a.radius;
+     if (a.y > canvas.height + a.radius) a.y = -a.radius;
+   }
+
+   // Ship-to-ship collisions (combine overlapping ships)
+   for (let i = 0; i < ships.length; i++) {
+     for (let j = i + 1; j < ships.length; j++) {
+       const s1 = ships[i];
+       const s2 = ships[j];
+
+       const dx = s2.x - s1.x;
+       const dy = s2.y - s1.y;
+       const dist = Math.sqrt(dx * dx + dy * dy);
+
+       if (dist < s1.radius + s2.radius) {
+         // Combine mass (proportional to radius^2)
+         const m1 = s1.radius * s1.radius;
+         const m2 = s2.radius * s2.radius;
+         const totalM = m1 + m2;
+
+         // Conservation of linear momentum
+         s1.vx = (s1.vx * m1 + s2.vx * m2) / totalM;
+         s1.vy = (s1.vy * m1 + s2.vy * m2) / totalM;
+
+         // Grow ship size (capped at radius 24)
+         s1.radius = Math.min(24, Math.sqrt(m1 + m2));
+
+         // Spawn merge effect and remove s2
+         createExplosion((s1.x + s2.x) / 2, (s1.y + s2.y) / 2, '#ffffff');
+         ships.splice(j, 1);
+         j--;
+       }
+     }
+   }
+
+   // Update ship movement and environment interactions
    for (let i = ships.length - 1; i >= 0; i--) {
      const s = ships[i];
 
-     // Remove ship if it travels too far off-screen
      const margin = 500;
      if (s.x < -margin || s.x > canvas.width + margin || 
          s.y < -margin || s.y > canvas.height + margin) {
@@ -285,60 +417,67 @@
        continue;
      }
 
-     // Distance vector to central sun
+     // Sun gravity interaction
      const dx = centralNode.x - s.x;
      const dy = centralNode.y - s.y;
      const distSq = dx * dx + dy * dy;
      const dist = Math.sqrt(distSq);
 
-     // Absorption check: ship collides with central sun
      if (dist < centralNode.radius + s.radius) {
+       createExplosion(s.x, s.y, s.color);
        ships.splice(i, 1);
        continue;
      }
 
-     // Planet Collision Check & Bounce Math
+     // Asteroid collision check -> SHIP EXPLODES!
+     let shipExploded = false;
+     for (const a of asteroids) {
+       const adx = s.x - a.x;
+       const ady = s.y - a.y;
+       const aDist = Math.sqrt(adx * adx + ady * ady);
+
+       if (aDist < a.radius + s.radius) {
+         createExplosion(s.x, s.y, s.color);
+         ships.splice(i, 1);
+         shipExploded = true;
+         break;
+       }
+     }
+     if (shipExploded) continue;
+
+     // Planet Collision -> Bounce Physics
      for (const p of planets) {
        const pdx = s.x - p.x;
        const pdy = s.y - p.y;
        const pDist = Math.sqrt(pdx * pdx + pdy * pdy);
 
        if (pDist < p.radius + s.radius) {
-         // Collision normal vector
          const nx = pdx / pDist;
          const ny = pdy / pDist;
-
-         // Vector dot product of velocity and normal
          const dotProduct = s.vx * nx + s.vy * ny;
 
-         // Only bounce if moving towards planet center
          if (dotProduct < 0) {
-           const bounceDamping = 0.9; // Keeps 90% velocity after bouncing
+           const bounceDamping = 0.9;
            s.vx = (s.vx - 2 * dotProduct * nx) * bounceDamping;
            s.vy = (s.vy - 2 * dotProduct * ny) * bounceDamping;
          }
 
-         // Reposition rocket outside planet radius to prevent clipping
          const overlap = (p.radius + s.radius) - pDist;
          s.x += nx * overlap;
          s.y += ny * overlap;
        }
      }
 
-     // Inverse square law gravity acceleration from Sun
+     // Sun Gravity Acceleration
      const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
-
-     // Acceleration vector components
      const ax = acceleration * (dx / dist);
      const ay = acceleration * (dy / dist);
 
-     // Update velocity and position
      s.vx += ax;
      s.vy += ay;
      s.x += s.vx;
      s.y += s.vy;
 
-     // Record position history for orbit trails
      s.trail.push({ x: s.x, y: s.y });
      if (s.trail.length > TRAIL_LENGTH) {
        s.trail.shift();
@@ -346,12 +485,27 @@
    }
  }
 
+ function updateUI() {
+   if (isPaused) {
+     statusText.innerHTML = `Status: <span class="status-paused">PAUSED</span> | Press [SPACE] to Resume`;
+     return;
+   }
+
+   const now = Date.now();
+   const timeElapsed = now - lastLaunchTime;
+
+   if (timeElapsed < LAUNCH_COOLDOWN_MS) {
+     const remainingSec = ((LAUNCH_COOLDOWN_MS - timeElapsed) / 1000).toFixed(1);
+     statusText.innerHTML = `Status: <span class="status-cooldown">RELOADING (${remainingSec}s)...</span> | [SPACE] to Pause`;
+   } else {
+     statusText.innerHTML = `Status: <span class="status-ready">READY TO LAUNCH</span> | [SPACE] to Pause`;
+   }
+ }
+
  function drawBackground() {
-   // Space fill
    ctx.fillStyle = '#050512';
    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-   // Draw background nebulas
    for (const neb of nebulas) {
      const grad = ctx.createRadialGradient(neb.x, neb.y, 0, neb.x, neb.y, neb.radius);
      grad.addColorStop(0, neb.color);
@@ -360,7 +514,6 @@
      ctx.fillRect(0, 0, canvas.width, canvas.height);
    }
 
-   // Draw starfield
    for (const star of stars) {
      ctx.save();
      ctx.globalAlpha = star.alpha;
@@ -373,7 +526,6 @@
  }
 
  function drawSun() {
-   // Outer corona radial glow
    const sunGlow = ctx.createRadialGradient(
      centralNode.x, centralNode.y, centralNode.radius * 0.5,
      centralNode.x, centralNode.y, centralNode.radius * 3.5
@@ -387,7 +539,6 @@
    ctx.arc(centralNode.x, centralNode.y, centralNode.radius * 3.5, 0, Math.PI * 2);
    ctx.fill();
 
-   // Yellow Sun Core
    const sunBody = ctx.createRadialGradient(
      centralNode.x - centralNode.radius * 0.3, centralNode.y - centralNode.radius * 0.3, 2,
      centralNode.x, centralNode.y, centralNode.radius
@@ -407,7 +558,6 @@
    for (const p of planets) {
      ctx.save();
 
-     // Optional Planetary Ring (drawn behind)
      if (p.hasRing) {
        ctx.save();
        ctx.translate(p.x, p.y);
@@ -420,7 +570,6 @@
        ctx.restore();
      }
 
-     // Planet Gradient
      const pGrad = ctx.createRadialGradient(
        p.x - p.radius * 0.3, p.y - p.radius * 0.3, p.radius * 0.1,
        p.x, p.y, p.radius
@@ -438,13 +587,53 @@
    }
  }
 
+ function drawAsteroids() {
+   for (const a of asteroids) {
+     ctx.save();
+     ctx.translate(a.x, a.y);
+     ctx.rotate(a.rotation);
+
+     ctx.beginPath();
+     for (let i = 0; i < a.points.length; i++) {
+       const pt = a.points[i];
+       const r = a.radius * pt.rRatio;
+       const px = Math.cos(pt.angle) * r;
+       const py = Math.sin(pt.angle) * r;
+       if (i === 0) ctx.moveTo(px, py);
+       else ctx.lineTo(px, py);
+     }
+     ctx.closePath();
+
+     ctx.fillStyle = '#666677';
+     ctx.fill();
+     ctx.strokeStyle = '#9999bb';
+     ctx.lineWidth = 1.5;
+     ctx.stroke();
+
+     ctx.restore();
+   }
+ }
+
+ function drawParticles() {
+   for (const p of particles) {
+     ctx.save();
+     ctx.globalAlpha = p.life;
+     ctx.fillStyle = p.color;
+     ctx.beginPath();
+     ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+     ctx.fill();
+     ctx.restore();
+   }
+ }
+
  function drawRocket(s) {
-   // Rotate rocket toward direction of movement
    const angle = Math.atan2(s.vy, s.vx);
+   const scale = s.radius / 6; // Dynamic visual scale based on ship size
 
    ctx.save();
    ctx.translate(s.x, s.y);
    ctx.rotate(angle);
+   ctx.scale(scale, scale);
 
    // Animated Exhaust Flame
    ctx.fillStyle = '#ff4400';
@@ -463,17 +652,16 @@
    ctx.closePath();
    ctx.fill();
 
-   // Rocket Body & Fins
+   // Ship body
    ctx.fillStyle = s.color;
    ctx.beginPath();
-   ctx.moveTo(11, 0);           // Nose cone
-   ctx.lineTo(-6, -6);         // Upper fin
-   ctx.lineTo(-4, 0);          // Engine base
-   ctx.lineTo(-6, 6);          // Lower fin
+   ctx.moveTo(11, 0);
+   ctx.lineTo(-6, -6);
+   ctx.lineTo(-4, 0);
+   ctx.lineTo(-6, 6);
    ctx.closePath();
    ctx.fill();
 
-   // Nose Cone Cap
    ctx.fillStyle = '#ffffff';
    ctx.beginPath();
    ctx.moveTo(11, 0);
@@ -482,7 +670,6 @@
    ctx.closePath();
    ctx.fill();
 
-   // Cockpit Window
    ctx.fillStyle = '#003366';
    ctx.beginPath();
    ctx.arc(1, 0, 2, 0, Math.PI * 2);
@@ -491,12 +678,33 @@
    ctx.restore();
  }
 
+ function drawPauseOverlay() {
+   ctx.save();
+   ctx.fillStyle = 'rgba(5, 5, 16, 0.5)';
+   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+   ctx.font = 'bold 32px "Courier New", monospace';
+   ctx.fillStyle = '#ffd700';
+   ctx.textAlign = 'center';
+   ctx.textBaseline = 'middle';
+   ctx.shadowColor = 'rgba(255, 215, 0, 0.6)';
+   ctx.shadowBlur = 12;
+   ctx.fillText('PAUSED', canvas.width / 2, canvas.height / 2 - 10);
+
+   ctx.font = '14px "Courier New", monospace';
+   ctx.fillStyle = '#ffffff';
+   ctx.shadowBlur = 0;
+   ctx.fillText('Press [SPACE] to Resume', canvas.width / 2, canvas.height / 2 + 25);
+   ctx.restore();
+ }
+
  function draw() {
    drawBackground();
    drawPlanets();
+   drawAsteroids();
    drawSun();
+   drawParticles();
 
-   // Draw Ships & Trails
    for (const s of ships) {
      if (s.trail.length > 1) {
        ctx.beginPath();
@@ -506,17 +714,24 @@
        }
        ctx.strokeStyle = s.color;
        ctx.globalAlpha = 0.45;
-       ctx.lineWidth = 1.5;
+       ctx.lineWidth = Math.min(4, 1.5 * (s.radius / 6));
        ctx.stroke();
        ctx.globalAlpha = 1.0;
      }
 
      drawRocket(s);
    }
+
+   if (isPaused) {
+     drawPauseOverlay();
+   }
  }
 
  function animate() {
-   updatePhysics();
+   if (!isPaused) {
+     updatePhysics();
+   }
+   updateUI();
    draw();
    requestAnimationFrame(animate);
  }
