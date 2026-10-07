@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gravity Physics Baseline</title>
+    <title>Gravity Physics Simulator</title>
     <style>
         * {
             box-sizing: border-box;
@@ -158,7 +158,7 @@
     </div>
 
     <div class="instructions">
-        Click or tap anywhere on the canvas to launch a ball (1 launch per second).
+        Click or tap anywhere on the canvas to launch a ball (1 launch per second). Asteroids bounce balls and spawn new ones!
     </div>
 
     <script>
@@ -183,9 +183,12 @@
         const TRAIL_LENGTH = 300;         // Number of historic trail points stored
         const SOFTENING_FACTOR = 400;     // Prevents infinite velocity near center
         const SPAM_LIMIT_MS = 1000;        // Spam click filter threshold (1 second)
+        const NUM_ASTEROIDS = 6;           // Number of floating asteroids in scene
+        const MAX_BALLS = 40;              // Maximum balls on screen to protect Chromebook performance
 
         // STATE VARIABLES
         let balls = [];
+        let asteroids = [];
         let currentPlanetKey = 'earth';
         let lastLaunchTime = 0;
 
@@ -196,6 +199,44 @@
             radius: PLANETS[currentPlanetKey].radius
         };
 
+        function createAsteroids() {
+            asteroids = [];
+            for (let i = 0; i < NUM_ASTEROIDS; i++) {
+                let x, y, dist;
+                // Generate initial asteroid positions outside central gravity zone
+                do {
+                    x = Math.random() * canvas.width;
+                    y = Math.random() * canvas.height;
+                    const dx = x - canvas.width / 2;
+                    const dy = y - canvas.height / 2;
+                    dist = Math.sqrt(dx * dx + dy * dy);
+                } while (dist < 130);
+
+                const radius = Math.random() * 12 + 18; // Radius range 18 - 30
+                const speed = Math.random() * 1.2 + 0.6;
+                const angle = Math.random() * Math.PI * 2;
+
+                // Procedural jagged polygon shapes for rocky aesthetic
+                const numPoints = 8 + Math.floor(Math.random() * 5);
+                const offsets = [];
+                for (let p = 0; p < numPoints; p++) {
+                    offsets.push(0.75 + Math.random() * 0.5);
+                }
+
+                asteroids.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    radius: radius,
+                    numPoints: numPoints,
+                    offsets: offsets,
+                    rotAngle: 0,
+                    rotSpeed: (Math.random() - 0.5) * 0.02
+                });
+            }
+        }
+
         function resizeCanvas() {
             const wrapper = document.getElementById('canvas-wrapper');
             canvas.width = wrapper.clientWidth;
@@ -204,6 +245,10 @@
             // Recenter gravity node dynamically
             centralNode.x = canvas.width / 2;
             centralNode.y = canvas.height / 2;
+
+            if (asteroids.length === 0) {
+                createAsteroids();
+            }
         }
 
         window.addEventListener('resize', resizeCanvas);
@@ -241,33 +286,59 @@
         canvas.addEventListener('click', handleInput);
 
         function launchBall(x, y) {
-            // Fixed launch direction: 90° (0° = UP, 90° = RIGHT, 180° = DOWN, 270° = LEFT)
             const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
-            const vx = LAUNCH_VELOCITY * Math.sin(rad);  // sin(90°) = 1  -> vx = 5
-            const vy = -LAUNCH_VELOCITY * Math.cos(rad); // cos(90°) = 0  -> vy = 0
+            const vx = LAUNCH_VELOCITY * Math.sin(rad);  
+            const vy = -LAUNCH_VELOCITY * Math.cos(rad); 
 
-            // Overwrite existing array to strictly maintain a single ball on screen
-            balls = [{
-                x: x,
-                y: y,
-                vx: vx,
-                vy: vy,
-                radius: 4,
-                trail: [] // Stores history of past {x, y} coordinates
-            }];
+            if (balls.length < MAX_BALLS) {
+                balls.push({
+                    x: x,
+                    y: y,
+                    vx: vx,
+                    vy: vy,
+                    radius: 4,
+                    trail: []
+                });
+            }
         }
 
         function resetSimulation() {
             balls = [];
+            createAsteroids();
         }
 
         function updatePhysics() {
             const currentPlanet = PLANETS[currentPlanetKey];
 
+            // 1. Update Asteroid Movement & Boundary Collisions
+            for (const ast of asteroids) {
+                ast.x += ast.vx;
+                ast.y += ast.vy;
+                ast.rotAngle += ast.rotSpeed;
+
+                if (ast.x - ast.radius < 0) {
+                    ast.x = ast.radius;
+                    ast.vx *= -1;
+                } else if (ast.x + ast.radius > canvas.width) {
+                    ast.x = canvas.width - ast.radius;
+                    ast.vx *= -1;
+                }
+                if (ast.y - ast.radius < 0) {
+                    ast.y = ast.radius;
+                    ast.vy *= -1;
+                } else if (ast.y + ast.radius > canvas.height) {
+                    ast.y = canvas.height - ast.radius;
+                    ast.vy *= -1;
+                }
+            }
+
+            // 2. Update Ball Physics & Asteroid Collisions
+            let newBallsToSpawn = [];
+
             for (let i = balls.length - 1; i >= 0; i--) {
                 const b = balls[i];
 
-                // Remove ball if it travels too far off-screen (prevents memory leak)
+                // Remove ball if it travels too far off-screen
                 const margin = 500;
                 if (b.x < -margin || b.x > canvas.width + margin || 
                     b.y < -margin || b.y > canvas.height + margin) {
@@ -287,7 +358,7 @@
                     continue;
                 }
 
-                // Inverse square law gravity acceleration scaled by planet mass
+                // Inverse square law gravity acceleration
                 const acceleration = currentPlanet.gravity / (distSq + SOFTENING_FACTOR);
 
                 // Acceleration vector components
@@ -300,11 +371,60 @@
                 b.x += b.vx;
                 b.y += b.vy;
 
+                // Asteroid Collision Detection & Spawning Logic
+                for (const ast of asteroids) {
+                    const adx = b.x - ast.x;
+                    const ady = b.y - ast.y;
+                    const adist = Math.sqrt(adx * adx + ady * ady);
+                    const minDist = ast.radius + b.radius;
+
+                    if (adist < minDist) {
+                        // Collision normal vector
+                        const nx = adx / (adist || 1);
+                        const ny = ady / (adist || 1);
+
+                        // Push ball outside asteroid radius to eliminate stickiness
+                        const overlap = minDist - adist;
+                        b.x += nx * overlap;
+                        b.y += ny * overlap;
+
+                        // Dot product of velocity with collision normal
+                        const dot = b.vx * nx + b.vy * ny;
+
+                        if (dot < 0) {
+                            // Bounce original ball off asteroid normal surface
+                            b.vx = b.vx - 2 * dot * nx;
+                            b.vy = b.vy - 2 * dot * ny;
+
+                            // Spawn a secondary ball bouncing off in a scattered angle
+                            if (balls.length + newBallsToSpawn.length < MAX_BALLS) {
+                                const currentSpeed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+                                const bounceAngle = Math.atan2(b.vy, b.vx);
+                                const scatterAngle = bounceAngle + (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 4 + Math.random() * Math.PI / 4);
+
+                                newBallsToSpawn.push({
+                                    x: b.x + nx * 4,
+                                    y: b.y + ny * 4,
+                                    vx: Math.cos(scatterAngle) * currentSpeed,
+                                    vy: Math.sin(scatterAngle) * currentSpeed,
+                                    radius: 4,
+                                    trail: []
+                                });
+                            }
+                        }
+                    }
+                }
+
                 // Record position history for line trail
                 b.trail.push({ x: b.x, y: b.y });
                 if (b.trail.length > TRAIL_LENGTH) {
                     b.trail.shift();
                 }
+            }
+
+            // Append newly spawned collision balls
+            if (newBallsToSpawn.length > 0) {
+                balls.push(...newBallsToSpawn);
             }
         }
 
@@ -315,7 +435,35 @@
             ctx.fillStyle = '#000000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Draw Central Planet Node
+            // 1. Draw Asteroids
+            ctx.strokeStyle = '#aaaaaa';
+            ctx.fillStyle = '#1c1c1c';
+            ctx.lineWidth = 1.5;
+
+            for (const ast of asteroids) {
+                ctx.save();
+                ctx.translate(ast.x, ast.y);
+                ctx.rotate(ast.rotAngle);
+
+                ctx.beginPath();
+                const step = (Math.PI * 2) / ast.numPoints;
+                for (let p = 0; p < ast.numPoints; p++) {
+                    const r = ast.radius * ast.offsets[p];
+                    const px = Math.cos(p * step) * r;
+                    const py = Math.sin(p * step) * r;
+                    if (p === 0) {
+                        ctx.moveTo(px, py);
+                    } else {
+                        ctx.lineTo(px, py);
+                    }
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // 2. Draw Central Planet Node
             ctx.beginPath();
             ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
             ctx.fillStyle = currentPlanet.color;
@@ -327,7 +475,7 @@
             ctx.fillStyle = '#000000';
             ctx.fill();
 
-            // 2. Draw Ball & Trail
+            // 3. Draw Balls & Trails
             for (const b of balls) {
                 // Draw path line
                 if (b.trail.length > 1) {
