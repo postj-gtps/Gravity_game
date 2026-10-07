@@ -22,17 +22,19 @@
    justify-content: flex-start;
    height: 100vh;
    overflow: hidden;
-   padding: 16px;
+   padding: 12px;
  }
 
  /* Top Header Bar */
  #header {
    display: flex;
+   flex-wrap: wrap;
    justify-content: space-between;
    align-items: center;
+   gap: 12px;
    width: 100%;
    max-width: 1100px;
-   margin-bottom: 12px;
+   margin-bottom: 8px;
    padding-bottom: 8px;
    border-bottom: 1px solid #334466;
  }
@@ -46,12 +48,45 @@
    text-shadow: 0 0 8px rgba(255, 215, 0, 0.4);
  }
 
+ .controls-group {
+   display: flex;
+   align-items: center;
+   gap: 14px;
+   flex-wrap: wrap;
+ }
+
+ .control-item {
+   display: flex;
+   align-items: center;
+   gap: 8px;
+   font-size: 13px;
+   color: #ffd700;
+   font-weight: bold;
+ }
+
+ select, input[type="range"] {
+   background: #101528;
+   color: #ffffff;
+   border: 1px solid #ffd700;
+   padding: 4px 8px;
+   border-radius: 4px;
+   font-family: inherit;
+   font-size: 13px;
+   outline: none;
+   cursor: pointer;
+ }
+
+ input[type="range"] {
+   accent-color: #ffd700;
+   width: 100px;
+ }
+
  .btn-reset {
    background: rgba(255, 255, 255, 0.1);
    color: #ffffff;
    border: 1px solid #ffd700;
-   padding: 6px 16px;
-   font-size: 14px;
+   padding: 6px 14px;
+   font-size: 13px;
    font-weight: bold;
    cursor: pointer;
    text-transform: uppercase;
@@ -88,7 +123,7 @@
  }
 
  .instructions {
-   margin-top: 8px;
+   margin-top: 6px;
    font-size: 12px;
    color: #aaaacc;
    text-align: center;
@@ -100,7 +135,31 @@
  <!-- Header Section -->
  <div id="header">
    <h1>Gravity Simulation</h1>
-   <button class="btn-reset" onclick="resetSimulation()">Reset</button>
+   
+   <div class="controls-group">
+     <div class="control-item">
+       <label for="centralSelect">Center Body:</label>
+       <select id="centralSelect" onchange="updateCentralObject()">
+         <option value="sun" selected>Sun (Super Heavy)</option>
+         <option value="jupiter">Jupiter (Very Heavy)</option>
+         <option value="saturn">Saturn (Heavy)</option>
+         <option value="neptune">Neptune (Medium Heavy)</option>
+         <option value="uranus">Uranus (Medium Heavy)</option>
+         <option value="earth">Earth (Medium)</option>
+         <option value="venus">Venus (Medium)</option>
+         <option value="mars">Mars (Light)</option>
+         <option value="mercury">Mercury (Very Light)</option>
+       </select>
+     </div>
+
+     <div class="control-item">
+       <label for="speedSlider">Launch Speed:</label>
+       <input type="range" id="speedSlider" min="1" max="15" value="5" step="0.5" oninput="updateLaunchSpeed(this.value)">
+       <span id="speedValue">5</span>
+     </div>
+
+     <button class="btn-reset" onclick="resetSimulation()">Reset</button>
+   </div>
  </div>
 
  <!-- Canvas Container -->
@@ -109,36 +168,69 @@
  </div>
 
  <div class="instructions">
-   Tap or click anywhere to launch rockets! (Max 20 ships — watch them bounce off planets!)
+   Tap or click anywhere to launch rockets! (1 launch per sec max | Max 20 ships)
  </div>
 
  <script>
  const canvas = document.getElementById('simCanvas');
  const ctx = canvas.getContext('2d');
 
- // SIMULATION CONSTANTS
- const GRAVITY_CONSTANT = 1800; // Strength of gravitational pull (G)
- const LAUNCH_VELOCITY = 5; // Fixed velocity on click
+ // SIMULATION DATA & PRESETS
+ const CENTRAL_BODIES = {
+   sun:     { name: 'Sun',     gravity: 3600, radius: 24, type: 'sun' },
+   jupiter: { name: 'Jupiter', gravity: 2800, radius: 22, type: 'jupiter' },
+   saturn:  { name: 'Saturn',  gravity: 2200, radius: 20, type: 'saturn' },
+   neptune: { name: 'Neptune', gravity: 1700, radius: 18, type: 'neptune' },
+   uranus:  { name: 'Uranus',  gravity: 1600, radius: 18, type: 'uranus' },
+   earth:   { name: 'Earth',   gravity: 1300, radius: 16, type: 'earth' },
+   venus:   { name: 'Venus',   gravity: 1200, radius: 15, type: 'venus' },
+   mars:    { name: 'Mars',    gravity: 750,  radius: 13, type: 'mars' },
+   mercury: { name: 'Mercury', gravity: 450,  radius: 11, type: 'mercury' }
+ };
+
+ // STATE VARIABLES
+ let currentLaunchSpeed = 5;
+ let gravityConstant = CENTRAL_BODIES.sun.gravity;
  const FIXED_LAUNCH_ANGLE = 90; // Base direction in degrees (90° = straight right)
  const TRAIL_LENGTH = 300; // Number of historic trail points stored
  const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
  const MAX_SHIPS = 20; // Upper limit of active rocketships
+ const LAUNCH_COOLDOWN_MS = 1000; // 1 second spam-click prevention filter
 
- // STATE VARIABLES
+ let lastLaunchTime = 0;
+ let cooldownMessageTimer = 0;
+
  let ships = [];
  let stars = [];
  let nebulas = [];
  let planets = [];
 
- // Central Gravity Node Definition (Yellow Sun)
+ // Central Gravity Node Definition
  const centralNode = {
    x: 0,
    y: 0,
-   radius: 18
+   radius: CENTRAL_BODIES.sun.radius,
+   type: 'sun',
+   name: 'Sun'
  };
 
+ function updateCentralObject() {
+   const select = document.getElementById('centralSelect');
+   const key = select.value;
+   const body = CENTRAL_BODIES[key] || CENTRAL_BODIES.sun;
+
+   centralNode.radius = body.radius;
+   centralNode.type = body.type;
+   centralNode.name = body.name;
+   gravityConstant = body.gravity;
+ }
+
+ function updateLaunchSpeed(val) {
+   currentLaunchSpeed = parseFloat(val);
+   document.getElementById('speedValue').innerText = currentLaunchSpeed;
+ }
+
  function generateSpaceBackground() {
-   // Generate starfield
    stars = [];
    const starCount = Math.floor((canvas.width * canvas.height) / 3000);
    for (let i = 0; i < starCount; i++) {
@@ -151,7 +243,6 @@
      });
    }
 
-   // Generate soft background nebulas
    nebulas = [
      { x: canvas.width * 0.2, y: canvas.height * 0.3, radius: Math.max(canvas.width, canvas.height) * 0.35, color: 'rgba(120, 40, 200, 0.22)' },
      { x: canvas.width * 0.8, y: canvas.height * 0.7, radius: Math.max(canvas.width, canvas.height) * 0.4, color: 'rgba(30, 100, 220, 0.22)' },
@@ -161,7 +252,7 @@
 
  function generatePlanets() {
    planets = [];
-   const planetCount = 4; // Number of planets to scatter
+   const planetCount = 4;
    const planetStyles = [
      { main: '#33ffaa', shadow: '#007744', name: 'Emerald' },
      { main: '#ff9933', shadow: '#883300', ring: true },
@@ -170,24 +261,21 @@
    ];
 
    for (let i = 0; i < planetCount; i++) {
-     let px, py, distToSun;
+     let px, py, distToCenter;
      let isValidPosition = false;
      let attempts = 0;
-     const radius = 16 + Math.random() * 12; // Radius between 16 and 28
+     const radius = 16 + Math.random() * 12;
 
-     // Place planets safely away from the center Sun and canvas borders
      while (!isValidPosition && attempts < 100) {
        px = 80 + Math.random() * (canvas.width - 160);
        py = 80 + Math.random() * (canvas.height - 160);
 
        const dx = px - centralNode.x;
        const dy = py - centralNode.y;
-       distToSun = Math.sqrt(dx * dx + dy * dy);
+       distToCenter = Math.sqrt(dx * dx + dy * dy);
 
-       // Check safe distance from Sun (at least 130px away)
-       if (distToSun > 130) {
+       if (distToCenter > 140) {
          isValidPosition = true;
-         // Check overlapping with already created planets
          for (const existing of planets) {
            const edx = px - existing.x;
            const edy = py - existing.y;
@@ -217,7 +305,6 @@
    canvas.width = wrapper.clientWidth;
    canvas.height = wrapper.clientHeight;
    
-   // Recenter central Sun dynamically
    centralNode.x = canvas.width / 2;
    centralNode.y = canvas.height / 2;
 
@@ -226,10 +313,16 @@
  }
 
  window.addEventListener('resize', resizeCanvas);
- resizeCanvas();
 
- // Touch & Click Handler: Launch ships in a spread
+ // Touch & Click Handler with 1-Second Spam-Click Filter
  canvas.addEventListener('pointerdown', (e) => {
+   const now = Date.now();
+   if (now - lastLaunchTime < LAUNCH_COOLDOWN_MS) {
+     cooldownMessageTimer = 45; // Display warning frame counter
+     return;
+   }
+   lastLaunchTime = now;
+
    const rect = canvas.getBoundingClientRect();
    const clickX = e.clientX - rect.left;
    const clickY = e.clientY - rect.top;
@@ -239,7 +332,7 @@
 
  function launchShips(x, y) {
    const shipCount = 5;
-   const totalSpreadDeg = 30; // 30-degree total spread
+   const totalSpreadDeg = 30;
    const startAngle = FIXED_LAUNCH_ANGLE - (totalSpreadDeg / 2); 
    const angleStep = totalSpreadDeg / (shipCount - 1); 
 
@@ -248,8 +341,8 @@
    for (let i = 0; i < shipCount; i++) {
      const currentAngleDeg = startAngle + (i * angleStep);
      const rad = (currentAngleDeg * Math.PI) / 180;
-     const vx = LAUNCH_VELOCITY * Math.sin(rad);
-     const vy = -LAUNCH_VELOCITY * Math.cos(rad);
+     const vx = currentLaunchSpeed * Math.sin(rad);
+     const vy = -currentLaunchSpeed * Math.cos(rad);
 
      ships.push({
        x: x,
@@ -262,7 +355,6 @@
      });
    }
 
-   // Maintain maximum limit of 20 rocketships (removes oldest)
    while (ships.length > MAX_SHIPS) {
      ships.shift();
    }
@@ -277,7 +369,6 @@
    for (let i = ships.length - 1; i >= 0; i--) {
      const s = ships[i];
 
-     // Remove ship if it travels too far off-screen
      const margin = 500;
      if (s.x < -margin || s.x > canvas.width + margin || 
          s.y < -margin || s.y > canvas.height + margin) {
@@ -285,60 +376,47 @@
        continue;
      }
 
-     // Distance vector to central sun
      const dx = centralNode.x - s.x;
      const dy = centralNode.y - s.y;
      const distSq = dx * dx + dy * dy;
      const dist = Math.sqrt(distSq);
 
-     // Absorption check: ship collides with central sun
      if (dist < centralNode.radius + s.radius) {
        ships.splice(i, 1);
        continue;
      }
 
-     // Planet Collision Check & Bounce Math
      for (const p of planets) {
        const pdx = s.x - p.x;
        const pdy = s.y - p.y;
        const pDist = Math.sqrt(pdx * pdx + pdy * pdy);
 
        if (pDist < p.radius + s.radius) {
-         // Collision normal vector
          const nx = pdx / pDist;
          const ny = pdy / pDist;
-
-         // Vector dot product of velocity and normal
          const dotProduct = s.vx * nx + s.vy * ny;
 
-         // Only bounce if moving towards planet center
          if (dotProduct < 0) {
-           const bounceDamping = 0.9; // Keeps 90% velocity after bouncing
+           const bounceDamping = 0.9;
            s.vx = (s.vx - 2 * dotProduct * nx) * bounceDamping;
            s.vy = (s.vy - 2 * dotProduct * ny) * bounceDamping;
          }
 
-         // Reposition rocket outside planet radius to prevent clipping
          const overlap = (p.radius + s.radius) - pDist;
          s.x += nx * overlap;
          s.y += ny * overlap;
        }
      }
 
-     // Inverse square law gravity acceleration from Sun
-     const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
-
-     // Acceleration vector components
+     const acceleration = gravityConstant / (distSq + SOFTENING_FACTOR);
      const ax = acceleration * (dx / dist);
      const ay = acceleration * (dy / dist);
 
-     // Update velocity and position
      s.vx += ax;
      s.vy += ay;
      s.x += s.vx;
      s.y += s.vy;
 
-     // Record position history for orbit trails
      s.trail.push({ x: s.x, y: s.y });
      if (s.trail.length > TRAIL_LENGTH) {
        s.trail.shift();
@@ -347,11 +425,9 @@
  }
 
  function drawBackground() {
-   // Space fill
    ctx.fillStyle = '#050512';
    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-   // Draw background nebulas
    for (const neb of nebulas) {
      const grad = ctx.createRadialGradient(neb.x, neb.y, 0, neb.x, neb.y, neb.radius);
      grad.addColorStop(0, neb.color);
@@ -360,7 +436,6 @@
      ctx.fillRect(0, 0, canvas.width, canvas.height);
    }
 
-   // Draw starfield
    for (const star of stars) {
      ctx.save();
      ctx.globalAlpha = star.alpha;
@@ -372,42 +447,173 @@
    }
  }
 
- function drawSun() {
-   // Outer corona radial glow
-   const sunGlow = ctx.createRadialGradient(
-     centralNode.x, centralNode.y, centralNode.radius * 0.5,
-     centralNode.x, centralNode.y, centralNode.radius * 3.5
-   );
-   sunGlow.addColorStop(0, 'rgba(255, 220, 50, 0.8)');
-   sunGlow.addColorStop(0.5, 'rgba(255, 140, 0, 0.25)');
-   sunGlow.addColorStop(1, 'rgba(255, 100, 0, 0)');
+ function drawCentralObject() {
+   const x = centralNode.x;
+   const y = centralNode.y;
+   const r = centralNode.radius;
 
-   ctx.fillStyle = sunGlow;
-   ctx.beginPath();
-   ctx.arc(centralNode.x, centralNode.y, centralNode.radius * 3.5, 0, Math.PI * 2);
-   ctx.fill();
+   ctx.save();
 
-   // Yellow Sun Core
-   const sunBody = ctx.createRadialGradient(
-     centralNode.x - centralNode.radius * 0.3, centralNode.y - centralNode.radius * 0.3, 2,
-     centralNode.x, centralNode.y, centralNode.radius
-   );
-   sunBody.addColorStop(0, '#ffffff');
-   sunBody.addColorStop(0.3, '#fff066');
-   sunBody.addColorStop(0.8, '#ffcc00');
-   sunBody.addColorStop(1, '#ff8800');
+   if (centralNode.type === 'sun') {
+     const sunGlow = ctx.createRadialGradient(x, y, r * 0.5, x, y, r * 3.5);
+     sunGlow.addColorStop(0, 'rgba(255, 220, 50, 0.8)');
+     sunGlow.addColorStop(0.5, 'rgba(255, 140, 0, 0.25)');
+     sunGlow.addColorStop(1, 'rgba(255, 100, 0, 0)');
 
-   ctx.fillStyle = sunBody;
-   ctx.beginPath();
-   ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
-   ctx.fill();
+     ctx.fillStyle = sunGlow;
+     ctx.beginPath();
+     ctx.arc(x, y, r * 3.5, 0, Math.PI * 2);
+     ctx.fill();
+
+     const sunBody = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, 2, x, y, r);
+     sunBody.addColorStop(0, '#ffffff');
+     sunBody.addColorStop(0.3, '#fff066');
+     sunBody.addColorStop(0.8, '#ffcc00');
+     sunBody.addColorStop(1, '#ff8800');
+
+     ctx.fillStyle = sunBody;
+     ctx.beginPath();
+     ctx.arc(x, y, r, 0, Math.PI * 2);
+     ctx.fill();
+
+   } else if (centralNode.type === 'jupiter') {
+     const jGrad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+     jGrad.addColorStop(0, '#ffe8d0');
+     jGrad.addColorStop(0.5, '#d88b48');
+     jGrad.addColorStop(1, '#683010');
+
+     ctx.fillStyle = jGrad;
+     ctx.beginPath();
+     ctx.arc(x, y, r, 0, Math.PI * 2);
+     ctx.fill();
+
+     // Stripes
+     ctx.strokeStyle = 'rgba(100, 40, 10, 0.4)';
+     ctx.lineWidth = 3;
+     ctx.beginPath();
+     ctx.arc(x, y, r * 0.8, -0.4, 0.4);
+     ctx.stroke();
+     ctx.beginPath();
+     ctx.arc(x, y, r * 0.8, 2.7, 3.5);
+     ctx.stroke();
+
+     // Great Red Spot
+     ctx.fillStyle = '#cc3311';
+     ctx.beginPath();
+     ctx.ellipse(x + r * 0.4, y + r * 0.2, r * 0.3, r * 0.2, 0, 0, Math.PI * 2);
+     ctx.fill();
+
+   } else if (centralNode.type === 'saturn') {
+     // Rings behind body
+     ctx.save();
+     ctx.translate(x, y);
+     ctx.rotate(-Math.PI / 7);
+     ctx.beginPath();
+     ctx.ellipse(0, 0, r * 2.2, r * 0.5, 0, 0, Math.PI * 2);
+     ctx.strokeStyle = 'rgba(230, 200, 140, 0.7)';
+     ctx.lineWidth = 5;
+     ctx.stroke();
+     ctx.restore();
+
+     const sGrad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+     sGrad.addColorStop(0, '#fff5d0');
+     sGrad.addColorStop(0.5, '#e0c080');
+     sGrad.addColorStop(1, '#705830');
+
+     ctx.fillStyle = sGrad;
+     ctx.beginPath();
+     ctx.arc(x, y, r, 0, Math.PI * 2);
+     ctx.fill();
+
+   } else if (centralNode.type === 'earth') {
+     const eGrad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+     eGrad.addColorStop(0, '#66ccff');
+     eGrad.addColorStop(0.5, '#2266cc');
+     eGrad.addColorStop(1, '#001144');
+
+     ctx.fillStyle = eGrad;
+     ctx.beginPath();
+     ctx.arc(x, y, r, 0, Math.PI * 2);
+     ctx.fill();
+
+     // Continents
+     ctx.fillStyle = '#44aa44';
+     ctx.beginPath();
+     ctx.arc(x - r * 0.2, y - r * 0.2, r * 0.4, 0, Math.PI * 2);
+     ctx.fill();
+     ctx.beginPath();
+     ctx.arc(x + r * 0.3, y + r * 0.3, r * 0.35, 0, Math.PI * 2);
+     ctx.fill();
+
+   } else if (centralNode.type === 'mars') {
+     const mGrad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+     mGrad.addColorStop(0, '#ff9966');
+     mGrad.addColorStop(0.5, '#cc3300');
+     mGrad.addColorStop(1, '#550000');
+
+     ctx.fillStyle = mGrad;
+     ctx.beginPath();
+     ctx.arc(x, y, r, 0, Math.PI * 2);
+     ctx.fill();
+
+   } else if (centralNode.type === 'venus') {
+     const vGrad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+     vGrad.addColorStop(0, '#ffeedd');
+     vGrad.addColorStop(0.5, '#e6b800');
+     vGrad.addColorStop(1, '#805d00');
+
+     ctx.fillStyle = vGrad;
+     ctx.beginPath();
+     ctx.arc(x, y, r, 0, Math.PI * 2);
+     ctx.fill();
+
+   } else if (centralNode.type === 'mercury') {
+     const mercGrad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+     mercGrad.addColorStop(0, '#dddddd');
+     mercGrad.addColorStop(0.5, '#888888');
+     mercGrad.addColorStop(1, '#333333');
+
+     ctx.fillStyle = mercGrad;
+     ctx.beginPath();
+     ctx.arc(x, y, r, 0, Math.PI * 2);
+     ctx.fill();
+
+   } else if (centralNode.type === 'uranus') {
+     const uGrad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+     uGrad.addColorStop(0, '#e0ffff');
+     uGrad.addColorStop(0.5, '#66ccaa');
+     uGrad.addColorStop(1, '#115544');
+
+     ctx.fillStyle = uGrad;
+     ctx.beginPath();
+     ctx.arc(x, y, r, 0, Math.PI * 2);
+     ctx.fill();
+
+   } else if (centralNode.type === 'neptune') {
+     const nGrad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+     nGrad.addColorStop(0, '#99bbff');
+     nGrad.addColorStop(0.5, '#2244cc');
+     nGrad.addColorStop(1, '#051144');
+
+     ctx.fillStyle = nGrad;
+     ctx.beginPath();
+     ctx.arc(x, y, r, 0, Math.PI * 2);
+     ctx.fill();
+   }
+
+   // Center Body Name Label
+   ctx.fillStyle = '#ffffff';
+   ctx.font = 'bold 11px sans-serif';
+   ctx.textAlign = 'center';
+   ctx.fillText(centralNode.name, x, y + r + 15);
+
+   ctx.restore();
  }
 
  function drawPlanets() {
    for (const p of planets) {
      ctx.save();
 
-     // Optional Planetary Ring (drawn behind)
      if (p.hasRing) {
        ctx.save();
        ctx.translate(p.x, p.y);
@@ -420,7 +626,6 @@
        ctx.restore();
      }
 
-     // Planet Gradient
      const pGrad = ctx.createRadialGradient(
        p.x - p.radius * 0.3, p.y - p.radius * 0.3, p.radius * 0.1,
        p.x, p.y, p.radius
@@ -439,14 +644,13 @@
  }
 
  function drawRocket(s) {
-   // Rotate rocket toward direction of movement
    const angle = Math.atan2(s.vy, s.vx);
 
    ctx.save();
    ctx.translate(s.x, s.y);
    ctx.rotate(angle);
 
-   // Animated Exhaust Flame
+   // Flame
    ctx.fillStyle = '#ff4400';
    ctx.beginPath();
    ctx.moveTo(-8, -3);
@@ -463,17 +667,17 @@
    ctx.closePath();
    ctx.fill();
 
-   // Rocket Body & Fins
+   // Body
    ctx.fillStyle = s.color;
    ctx.beginPath();
-   ctx.moveTo(11, 0);           // Nose cone
-   ctx.lineTo(-6, -6);         // Upper fin
-   ctx.lineTo(-4, 0);          // Engine base
-   ctx.lineTo(-6, 6);          // Lower fin
+   ctx.moveTo(11, 0);
+   ctx.lineTo(-6, -6);
+   ctx.lineTo(-4, 0);
+   ctx.lineTo(-6, 6);
    ctx.closePath();
    ctx.fill();
 
-   // Nose Cone Cap
+   // Nose Cap
    ctx.fillStyle = '#ffffff';
    ctx.beginPath();
    ctx.moveTo(11, 0);
@@ -482,7 +686,7 @@
    ctx.closePath();
    ctx.fill();
 
-   // Cockpit Window
+   // Window
    ctx.fillStyle = '#003366';
    ctx.beginPath();
    ctx.arc(1, 0, 2, 0, Math.PI * 2);
@@ -491,10 +695,22 @@
    ctx.restore();
  }
 
+ function drawCooldownNotice() {
+   if (cooldownMessageTimer > 0) {
+     ctx.save();
+     ctx.fillStyle = '#ff4444';
+     ctx.font = 'bold 14px sans-serif';
+     ctx.textAlign = 'center';
+     ctx.fillText('Wait 1 second between launches!', canvas.width / 2, 30);
+     ctx.restore();
+     cooldownMessageTimer--;
+   }
+ }
+
  function draw() {
    drawBackground();
    drawPlanets();
-   drawSun();
+   drawCentralObject();
 
    // Draw Ships & Trails
    for (const s of ships) {
@@ -513,6 +729,8 @@
 
      drawRocket(s);
    }
+
+   drawCooldownNotice();
  }
 
  function animate() {
@@ -522,6 +740,8 @@
  }
 
  window.onload = function() {
+   resizeCanvas();
+   updateCentralObject();
    animate();
  };
  </script>

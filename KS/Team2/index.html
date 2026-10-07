@@ -171,7 +171,7 @@
 
   <div id="info-bar">Selected: Earth | Surface Gravity Multiplier: 1.00x</div>
   <div class="instructions">
-    Tap or click anywhere on space to launch the selected planet.
+    Tap or click anywhere on space to launch a planet. Use WASD keys to gently thrust!
   </div>
 
   <script>
@@ -198,9 +198,12 @@
     const FIXED_LAUNCH_ANGLE = 90;      // Fixed launch direction in degrees (90° = Right)
     const TRAIL_LENGTH = 300;            // Historic points stored for tail
     const SOFTENING_FACTOR = 400;       // Prevents infinite acceleration near center
+    const THRUST_FORCE = 0.08;          // Gentle WASD thrust strength
 
     // STATE VARIABLES
     let balls = [];
+    let particles = [];
+    const keys = {};
 
     // Central Gravity Mass Node Definition
     const centralNode = {
@@ -221,6 +224,15 @@
 
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
+
+    // WASD Keyboard Listeners
+    window.addEventListener('keydown', (e) => {
+      keys[e.key.toLowerCase()] = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keys[e.key.toLowerCase()] = false;
+    });
 
     // Event Listener supporting both Mouse Clicks & Chromebook Touch Screen Taps
     canvas.addEventListener('pointerdown', (e) => {
@@ -262,13 +274,43 @@
       }];
     }
 
+    function triggerExplosion(x, y, planetColor) {
+      const particleCount = 35;
+      const explosionColors = [planetColor, '#ffcc00', '#ff5500', '#ff2200', '#ffffff'];
+
+      for (let i = 0; i < particleCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 4.5 + 0.8;
+        const color = explosionColors[Math.floor(Math.random() * explosionColors.length)];
+
+        particles.push({
+          x: x,
+          y: y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          radius: Math.random() * 3.5 + 1.5,
+          color: color,
+          alpha: 1.0,
+          decay: Math.random() * 0.025 + 0.015
+        });
+      }
+    }
+
     function resetSimulation() {
       balls = [];
+      particles = [];
     }
 
     function updatePhysics() {
+      // 1. Update active planet physics and thrust
       for (let i = balls.length - 1; i >= 0; i--) {
         const b = balls[i];
+
+        // Apply WASD gentle thrust controls
+        if (keys['w']) b.vy -= THRUST_FORCE;
+        if (keys['s']) b.vy += THRUST_FORCE;
+        if (keys['a']) b.vx -= THRUST_FORCE;
+        if (keys['d']) b.vx += THRUST_FORCE;
 
         // Off-screen cleanup
         const margin = 500;
@@ -284,8 +326,9 @@
         const distSq = dx * dx + dy * dy;
         const dist = Math.sqrt(distSq);
 
-        // Absorption check on collision with star
+        // Explosion check on collision with star
         if (dist < centralNode.radius + b.radius) {
+          triggerExplosion(b.x, b.y, b.color);
           balls.splice(i, 1);
           continue;
         }
@@ -308,6 +351,18 @@
         b.trail.push({ x: b.x, y: b.y });
         if (b.trail.length > TRAIL_LENGTH) {
           b.trail.shift();
+        }
+      }
+
+      // 2. Update explosion particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.alpha -= p.decay;
+
+        if (p.alpha <= 0) {
+          particles.splice(i, 1);
         }
       }
     }
@@ -358,6 +413,17 @@
         ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
         ctx.fillStyle = b.color;
         ctx.fill();
+      }
+
+      // 3. Draw Explosion Particles
+      for (const p of particles) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, p.alpha);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+        ctx.restore();
       }
     }
 
