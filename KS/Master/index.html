@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gravity Physics Baseline</title>
+    <title>Gravity Physics - Galaxy Edition</title>
     <style>
         * {
             box-sizing: border-box;
@@ -14,7 +14,7 @@
         }
 
         body {
-            background-color: #000000;
+            background-color: #030208;
             color: #ffffff;
             display: flex;
             flex-direction: column;
@@ -36,7 +36,8 @@
             max-width: 1100px;
             margin-bottom: 12px;
             padding-bottom: 8px;
-            border-bottom: 1px solid #ffffff;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+            z-index: 10;
         }
 
         h1 {
@@ -44,6 +45,7 @@
             letter-spacing: 2px;
             text-transform: uppercase;
             font-weight: bold;
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
         }
 
         /* Control Group Container */
@@ -113,7 +115,7 @@
         }
 
         canvas {
-            background-color: #000000;
+            background-color: #020106;
             border: 1px solid #ffffff;
             display: block;
             cursor: crosshair;
@@ -125,7 +127,7 @@
         .instructions {
             margin-top: 8px;
             font-size: 11px;
-            color: #888888;
+            color: #aaaaaa;
             text-align: center;
         }
     </style>
@@ -184,8 +186,6 @@
         const SPAM_COOLDOWN_MS = 1000;      // Minimum time between clicks (1 launch per second max)
 
         // SOLAR SYSTEM CELESTIAL BODIES DATA
-        // Relative masses maintain true physical ordering:
-        // Sun > Jupiter > Saturn > Neptune > Uranus > Earth > Venus > Mars > Mercury
         const CELESTIAL_BODIES = {
             sun:     { name: 'Sun',     massFactor: 5.0,  radius: 22, color: '#ffcc00' },
             mercury: { name: 'Mercury', massFactor: 0.35, radius: 6,  color: '#aaaaaa' },
@@ -201,6 +201,9 @@
         // STATE VARIABLES
         let balls = [];
         let lastLaunchTime = 0;
+        let galaxyStars = [];
+        let galaxyAngle = 0;
+        let astronauts = [];
 
         // Central Gravity Node Definition
         const centralNode = {
@@ -209,6 +212,52 @@
             key: 'earth',
             ...CELESTIAL_BODIES.earth
         };
+
+        // Initialize Galaxy Particles & Background Stars
+        function initGalaxy() {
+            galaxyStars = [];
+            const numStars = 1100;
+            const arms = 2;
+            const armWidth = 0.5;
+
+            for (let i = 0; i < numStars; i++) {
+                // Distribute stars along spiral arms
+                const dist = Math.pow(Math.random(), 2) * 550 + 10;
+                const armOffset = (Math.floor(Math.random() * arms) * (2 * Math.PI / arms));
+                const angle = dist * 0.008 + armOffset + (Math.random() - 0.5) * armWidth;
+                
+                // Color palette: core warm light, arms bright cyan/purple/pink/blue
+                let color;
+                const randColor = Math.random();
+                if (dist < 60) {
+                    color = 'rgba(255, 235, 200, ' + (0.4 + Math.random() * 0.5) + ')';
+                } else if (randColor < 0.35) {
+                    color = 'rgba(120, 180, 255, ' + (0.3 + Math.random() * 0.5) + ')';
+                } else if (randColor < 0.7) {
+                    color = 'rgba(200, 140, 255, ' + (0.3 + Math.random() * 0.5) + ')';
+                } else if (randColor < 0.85) {
+                    color = 'rgba(255, 120, 200, ' + (0.3 + Math.random() * 0.5) + ')';
+                } else {
+                    color = 'rgba(255, 255, 255, ' + (0.4 + Math.random() * 0.5) + ')';
+                }
+
+                galaxyStars.push({
+                    dist: dist,
+                    angle: angle,
+                    size: Math.random() * 1.8 + 0.5,
+                    color: color
+                });
+            }
+        }
+
+        // Initialize 3 Floating Astronauts with gentle drift speeds and rotations
+        function initAstronauts() {
+            astronauts = [
+                { x: 120, y: 140, vx: 0.12, vy: 0.08, angle: 0.2, vRot: 0.003, scale: 0.95 },
+                { x: canvas.width - 150, y: 180, vx: -0.09, vy: 0.11, angle: -0.5, vRot: -0.002, scale: 0.85 },
+                { x: 200, y: canvas.height - 150, vx: 0.07, vy: -0.10, angle: 1.1, vRot: 0.0025, scale: 1.05 }
+            ];
+        }
 
         // Update displayed speed label on slider movement
         speedSlider.addEventListener('input', () => {
@@ -237,10 +286,12 @@
             // Recenter gravity node dynamically
             centralNode.x = canvas.width / 2;
             centralNode.y = canvas.height / 2;
+
+            initGalaxy();
+            initAstronauts();
         }
 
         window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
 
         // Launch handler with 1x per second rate limiting (Spam Filter)
         function handleLaunchInput(clientX, clientY) {
@@ -332,14 +383,159 @@
                     b.trail.shift();
                 }
             }
+
+            // Slowly rotate background galaxy
+            galaxyAngle += 0.0006;
+
+            // Update drifting floating astronauts
+            for (const astro of astronauts) {
+                astro.x += astro.vx;
+                astro.y += astro.vy;
+                astro.angle += astro.vRot;
+
+                // Screen bounce/wrap-around boundaries
+                const margin = 40;
+                if (astro.x < -margin) astro.x = canvas.width + margin;
+                if (astro.x > canvas.width + margin) astro.x = -margin;
+                if (astro.y < -margin) astro.y = canvas.height + margin;
+                if (astro.y > canvas.height + margin) astro.y = -margin;
+            }
+        }
+
+        // Render Spiral Galaxy Background
+        function drawGalaxy() {
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+
+            // Deep space radial core gradient
+            const coreGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 450);
+            coreGlow.addColorStop(0, 'rgba(80, 50, 120, 0.45)');
+            coreGlow.addColorStop(0.2, 'rgba(30, 20, 65, 0.35)');
+            coreGlow.addColorStop(0.6, 'rgba(10, 8, 25, 0.2)');
+            coreGlow.addColorStop(1, 'rgba(2, 1, 6, 0)');
+
+            ctx.fillStyle = coreGlow;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw spiral galaxy arms & stars
+            for (let i = 0; i < galaxyStars.length; i++) {
+                const s = galaxyStars[i];
+                const currentAngle = s.angle + galaxyAngle;
+                const x = cx + Math.cos(currentAngle) * s.dist;
+                const y = cy + Math.sin(currentAngle) * s.dist;
+
+                // Only render stars within visible bounds
+                if (x >= 0 && x <= canvas.width && y >= 0 && y <= canvas.height) {
+                    ctx.beginPath();
+                    ctx.arc(x, y, s.size, 0, Math.PI * 2);
+                    ctx.fillStyle = s.color;
+                    ctx.fill();
+                }
+            }
+        }
+
+        // Procedurally render an Astronaut floating in space
+        function drawAstronaut(astro) {
+            ctx.save();
+            ctx.translate(astro.x, astro.y);
+            ctx.rotate(astro.angle);
+            ctx.scale(astro.scale, astro.scale);
+
+            // Life Support Backpack (PLSS)
+            ctx.fillStyle = '#cccccc';
+            ctx.fillRect(-18, -14, 10, 28);
+            ctx.strokeStyle = '#666666';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-18, -14, 10, 28);
+
+            // Space Suit Body
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.roundRect(-10, -12, 20, 26, 6);
+            ctx.fill();
+            ctx.strokeStyle = '#aaaaaa';
+            ctx.stroke();
+
+            // Chest Control Pack
+            ctx.fillStyle = '#333333';
+            ctx.fillRect(-4, -6, 8, 8);
+            ctx.fillStyle = '#ff4444';
+            ctx.fillRect(-2, -4, 2, 2);
+            ctx.fillStyle = '#44ff44';
+            ctx.fillRect(1, -4, 2, 2);
+
+            // Arms (Raised floating posture)
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+
+            // Left Arm
+            ctx.beginPath();
+            ctx.moveTo(-9, -8);
+            ctx.lineTo(-18, -16);
+            ctx.stroke();
+
+            // Right Arm
+            ctx.beginPath();
+            ctx.moveTo(9, -8);
+            ctx.lineTo(17, -2);
+            ctx.stroke();
+
+            // Legs
+            // Left Leg
+            ctx.beginPath();
+            ctx.moveTo(-5, 12);
+            ctx.lineTo(-12, 24);
+            ctx.stroke();
+
+            // Right Leg
+            ctx.beginPath();
+            ctx.moveTo(5, 12);
+            ctx.lineTo(10, 25);
+            ctx.stroke();
+
+            // Helmet
+            ctx.beginPath();
+            ctx.arc(0, -17, 10, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+            ctx.strokeStyle = '#cccccc';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Gold Reflective Helmet Visor
+            ctx.beginPath();
+            ctx.arc(1, -17, 7, -Math.PI * 0.45, Math.PI * 0.45);
+            ctx.fillStyle = '#ffb700';
+            ctx.fill();
+            ctx.strokeStyle = '#d49b00';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Visor reflection streak
+            ctx.beginPath();
+            ctx.arc(0, -18, 5, -Math.PI * 0.3, -Math.PI * 0.1);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            ctx.restore();
         }
 
         function draw() {
-            // Clear canvas background
-            ctx.fillStyle = '#000000';
+            // Clear canvas background with dark space base
+            ctx.fillStyle = '#020106';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Draw Saturn's Rings if selected
+            // 1. Draw Spiral Galaxy Background
+            drawGalaxy();
+
+            // 2. Draw Floating Astronauts
+            for (const astro of astronauts) {
+                drawAstronaut(astro);
+            }
+
+            // 3. Draw Saturn's Rings if selected
             if (centralNode.hasRings) {
                 ctx.save();
                 ctx.beginPath();
@@ -350,7 +546,7 @@
                 ctx.restore();
             }
 
-            // 2. Draw Central Celestial Mass Node
+            // 4. Draw Central Celestial Mass Node
             ctx.beginPath();
             ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
             ctx.fillStyle = centralNode.color;
@@ -368,7 +564,7 @@
             ctx.textAlign = 'center';
             ctx.fillText(centralNode.name, centralNode.x, centralNode.y + centralNode.radius + 16);
 
-            // 3. Draw Ball & Trail
+            // 5. Draw Ball & Trail
             for (const b of balls) {
                 if (b.trail.length > 1) {
                     ctx.beginPath();
@@ -395,6 +591,7 @@
         }
 
         window.onload = function() {
+            resizeCanvas();
             animate();
         };
     </script>
