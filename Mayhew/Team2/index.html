@@ -127,7 +127,7 @@
 
         // SIMULATION CONSTANTS
         const GRAVITY_CONSTANT = 1800;    // Strength of gravitational pull (G)
-        const TRAIL_LENGTH = 300;         // Number of historic trail points stored
+        const TRAIL_LENGTH = 180;         // Number of historic trail points stored
         const SOFTENING_FACTOR = 400;     // Prevents infinite velocity near center
         const SPAM_COOLDOWN_MS = 1000;    // 1-second spam-click limit between launches
         const MAX_DRAG_DIST = 200;        // Maximum pull-back distance for slingshot
@@ -136,6 +136,7 @@
 
         // STATE VARIABLES
         let balls = [];
+        let particles = [];              // Firework particles array
         let bouncyWalls = false;
         let lastLaunchTime = 0;
 
@@ -146,11 +147,11 @@
         let cooldownMessage = '';
         let cooldownTimeout = null;
 
-        // Central Gravity Node Definition
+        // Central Gravity Node Definition (The Sun)
         const centralNode = {
             x: 0,
             y: 0,
-            radius: 12
+            radius: 16
         };
 
         function resizeCanvas() {
@@ -263,16 +264,39 @@
                 y: y,
                 vx: vx,
                 vy: vy,
-                radius: 4,
+                radius: 5,
                 trail: [] // Stores history of past {x, y} coordinates
             }];
         }
 
         function resetSimulation() {
             balls = [];
+            particles = [];
+        }
+
+        // Spawn colorful firework particles when collision occurs with the sun
+        function createFireworkExplosion(x, y) {
+            const particleCount = 65;
+            const colors = ['#FFD700', '#FF4500', '#FF1493', '#00FFFF', '#00FF66', '#FF0055', '#FFFFFF', '#FFA500'];
+
+            for (let i = 0; i < particleCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 2 + Math.random() * 7;
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    radius: 2 + Math.random() * 2.5,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    alpha: 1.0,
+                    decay: 0.015 + Math.random() * 0.02
+                });
+            }
         }
 
         function updatePhysics() {
+            // 1. Update Balls
             for (let i = balls.length - 1; i >= 0; i--) {
                 const b = balls[i];
 
@@ -309,8 +333,9 @@
                 const distSq = dx * dx + dy * dy;
                 const dist = Math.sqrt(distSq);
 
-                // Absorption check: ball collides with central mass
+                // Collision check: ball collides with central sun -> EXPLODE!
                 if (dist < centralNode.radius + b.radius) {
+                    createFireworkExplosion(b.x, b.y);
                     balls.splice(i, 1);
                     continue;
                 }
@@ -328,12 +353,63 @@
                 b.x += b.vx;
                 b.y += b.vy;
 
-                // Record position history for line trail
+                // Record position history for trail
                 b.trail.push({ x: b.x, y: b.y });
                 if (b.trail.length > TRAIL_LENGTH) {
                     b.trail.shift();
                 }
             }
+
+            // 2. Update Firework Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vx *= 0.96; // Velocity friction/drag
+                p.vy *= 0.96;
+                p.alpha -= p.decay;
+
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        // Helper to render vector green alien faces along the trajectory trail
+        function drawAlienFace(x, y, scale, opacity) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.globalAlpha = opacity;
+
+            // Green Head (Oval shape)
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 6 * scale, 8 * scale, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#00FF33';
+            ctx.fill();
+            ctx.strokeStyle = '#00991F';
+            ctx.lineWidth = 1 * scale;
+            ctx.stroke();
+
+            // Left Eye (Black slanted almond eye)
+            ctx.beginPath();
+            ctx.ellipse(-2.2 * scale, -1.8 * scale, 1.6 * scale, 2.8 * scale, -Math.PI / 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#000000';
+            ctx.fill();
+
+            // Right Eye (Black slanted almond eye)
+            ctx.beginPath();
+            ctx.ellipse(2.2 * scale, -1.8 * scale, 1.6 * scale, 2.8 * scale, Math.PI / 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#000000';
+            ctx.fill();
+
+            // Tiny Mouth
+            ctx.beginPath();
+            ctx.arc(0, 3.5 * scale, 1.5 * scale, 0, Math.PI);
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 0.8 * scale;
+            ctx.stroke();
+
+            ctx.restore();
         }
 
         function drawSlingshot() {
@@ -391,43 +467,55 @@
             ctx.fillStyle = '#000000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Draw Central Mass Node
+            // 1. Draw Central Mass Node (Styled as glowing Sun)
+            ctx.shadowColor = '#FF8C00';
+            ctx.shadowBlur = 18;
             ctx.beginPath();
             ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
-            ctx.fillStyle = '#ffffff';
+            ctx.fillStyle = '#FFD700'; // Sun Gold
             ctx.fill();
 
-            // Center mark on node
+            // Glowing inner core of the sun
+            ctx.shadowBlur = 0;
             ctx.beginPath();
-            ctx.arc(centralNode.x, centralNode.y, 2, 0, Math.PI * 2);
-            ctx.fillStyle = '#000000';
+            ctx.arc(centralNode.x, centralNode.y, centralNode.radius * 0.55, 0, Math.PI * 2);
+            ctx.fillStyle = '#FF4500'; // Orange-Red Core
             ctx.fill();
 
-            // 2. Draw Ball & Trail
+            // 2. Draw Firework Particles
+            for (const p of particles) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, p.alpha);
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // 3. Draw Ball & Green Alien Face Trail
             for (const b of balls) {
-                // Draw path line
-                if (b.trail.length > 1) {
-                    ctx.beginPath();
-                    ctx.moveTo(b.trail[0].x, b.trail[0].y);
-                    for (let t = 1; t < b.trail.length; t++) {
-                        ctx.lineTo(b.trail[t].x, b.trail[t].y);
-                    }
-                    ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 1.2;
-                    ctx.stroke();
+                // Render green alien faces along the orbit trail (spaced every 6 points for optimal Chromebook FPS)
+                const step = 6;
+                for (let t = 0; t < b.trail.length; t += step) {
+                    const point = b.trail[t];
+                    const progress = (t + 1) / b.trail.length; // 0 (oldest point) to 1 (newest point)
+                    const opacity = 0.15 + 0.85 * progress;
+                    const scale = 0.5 + 0.7 * progress;
+                    drawAlienFace(point.x, point.y, scale, opacity);
                 }
 
-                // Draw ball object
+                // Draw current launched ball
                 ctx.beginPath();
                 ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
                 ctx.fillStyle = '#ffffff';
                 ctx.fill();
             }
 
-            // 3. Draw Slingshot Visual Aiming Overlay
+            // 4. Draw Slingshot Visual Aiming Overlay
             drawSlingshot();
 
-            // 4. Draw Spam-click Cooldown Banner
+            // 5. Draw Spam-click Cooldown Banner
             if (cooldownMessage) {
                 ctx.fillStyle = '#ffffff';
                 ctx.font = '12px "Courier New", Courier, monospace';

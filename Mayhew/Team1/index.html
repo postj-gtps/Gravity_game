@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gravity Physics - Fireball Edition</title>
+    <title>Gravity Physics - Rocket Edition</title>
     <style>
         * {
             box-sizing: border-box;
@@ -35,6 +35,8 @@
             margin-bottom: 12px;
             padding-bottom: 8px;
             border-bottom: 1px solid #ff5500;
+            gap: 12px;
+            flex-wrap: wrap;
         }
 
         h1 {
@@ -44,6 +46,26 @@
             font-weight: bold;
             color: #ffaa00;
             text-shadow: 0 0 8px rgba(255, 120, 0, 0.6);
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #ffaa00;
+            font-weight: bold;
+        }
+
+        .slider-group input[type=range] {
+            cursor: pointer;
+            accent-color: #ffaa00;
         }
 
         .btn-reset {
@@ -103,8 +125,15 @@
 
     <!-- Header Section -->
     <div id="header">
-        <h1>Gravity Simulation 🔥</h1>
-        <button class="btn-reset" onclick="resetSimulation()">Reset</button>
+        <h1>Gravity Simulation 🚀</h1>
+        
+        <div class="controls">
+            <div class="slider-group">
+                <label for="rocketSlider">Rockets: <span id="sliderValue">5</span></label>
+                <input type="range" id="rocketSlider" min="1" max="30" value="5" oninput="document.getElementById('sliderValue').innerText = this.value">
+            </div>
+            <button class="btn-reset" onclick="resetSimulation()">Reset</button>
+        </div>
     </div>
 
     <!-- Canvas Container -->
@@ -113,7 +142,7 @@
     </div>
 
     <div class="instructions">
-        Click or tap to launch a fireball! <span class="cooldown-text">(1 second launch limit)</span>
+        Click or tap to launch rockets! <span class="cooldown-text">(1 second launch limit)</span>
     </div>
 
     <script>
@@ -122,14 +151,13 @@
 
         // SIMULATION CONSTANTS
         const GRAVITY_CONSTANT = 1800;    // Strength of gravitational pull (G)
-        const LAUNCH_VELOCITY = 5;         // Fixed velocity on click
-        const FIXED_LAUNCH_ANGLE = 90;     // Fixed direction in degrees (90° = straight right)
-        const TRAIL_LENGTH = 70;          // Number of historic trail points stored
+        const LAUNCH_VELOCITY = 5;         // Fixed launch speed
+        const TRAIL_LENGTH = 40;           // Number of historic trail points stored
         const SOFTENING_FACTOR = 400;     // Prevents infinite velocity near center
         const COOLDOWN_TIME_MS = 1000;     // Baseline requirement: 1x per second spam limit
 
         // STATE VARIABLES
-        let balls = [];
+        let rockets = [];
         let particles = [];
         let lastLaunchTime = 0;
 
@@ -153,6 +181,12 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
+        // Generates bright random HSL colors for rockets
+        function getRandomColor() {
+            const hue = Math.floor(Math.random() * 360);
+            return `hsl(${hue}, 100%, 60%)`;
+        }
+
         // Pointer event handles both touchscreen taps and mouse clicks
         canvas.addEventListener('pointerdown', (e) => {
             const now = Date.now();
@@ -166,65 +200,72 @@
             const clickX = e.clientX - rect.left;
             const clickY = e.clientY - rect.top;
 
-            launchBall(clickX, clickY);
+            const count = parseInt(document.getElementById('rocketSlider').value, 10);
+            launchRockets(clickX, clickY, count);
             lastLaunchTime = now;
         });
 
-        function launchBall(x, y) {
-            const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
-            const vx = LAUNCH_VELOCITY * Math.sin(rad);
-            const vy = -LAUNCH_VELOCITY * Math.cos(rad);
+        function launchRockets(x, y, count) {
+            const angleStep = (Math.PI * 2) / count;
 
-            balls = [{
-                x: x,
-                y: y,
-                vx: vx,
-                vy: vy,
-                radius: 7,
-                trail: []
-            }];
+            for (let i = 0; i < count; i++) {
+                const angle = i * angleStep;
+                const vx = LAUNCH_VELOCITY * Math.cos(angle);
+                const vy = LAUNCH_VELOCITY * Math.sin(angle);
+
+                rockets.push({
+                    x: x,
+                    y: y,
+                    vx: vx,
+                    vy: vy,
+                    radius: 8,
+                    color: getRandomColor(),
+                    trail: []
+                });
+            }
         }
 
         function resetSimulation() {
-            balls = [];
+            rockets = [];
             particles = [];
         }
 
-        function spawnFireParticle(x, y, vx, vy) {
+        function spawnExhaustParticle(x, y, vx, vy, color) {
             particles.push({
-                x: x + (Math.random() - 0.5) * 6,
-                y: y + (Math.random() - 0.5) * 6,
+                x: x + (Math.random() - 0.5) * 4,
+                y: y + (Math.random() - 0.5) * 4,
                 vx: -vx * 0.2 + (Math.random() - 0.5) * 1.5,
                 vy: -vy * 0.2 + (Math.random() - 0.5) * 1.5,
-                size: Math.random() * 5 + 3,
+                size: Math.random() * 4 + 2,
                 life: 1.0,
-                decay: Math.random() * 0.04 + 0.03
+                decay: Math.random() * 0.04 + 0.03,
+                color: color
             });
         }
 
         function updatePhysics() {
-            // Update Ball Physics
-            for (let i = balls.length - 1; i >= 0; i--) {
-                const b = balls[i];
+            // Update Rocket Physics
+            for (let i = rockets.length - 1; i >= 0; i--) {
+                const r = rockets[i];
 
                 const margin = 500;
-                if (b.x < -margin || b.x > canvas.width + margin || 
-                    b.y < -margin || b.y > canvas.height + margin) {
-                    balls.splice(i, 1);
+                if (r.x < -margin || r.x > canvas.width + margin || 
+                    r.y < -margin || r.y > canvas.height + margin) {
+                    rockets.splice(i, 1);
                     continue;
                 }
 
-                const dx = centralNode.x - b.x;
-                const dy = centralNode.y - b.y;
+                const dx = centralNode.x - r.x;
+                const dy = centralNode.y - r.y;
                 const distSq = dx * dx + dy * dy;
                 const dist = Math.sqrt(distSq);
 
-                if (dist < centralNode.radius + b.radius) {
+                if (dist < centralNode.radius + r.radius) {
                     // Collision explosion effect
-                    for (let p = 0; p < 25; p++) {
-                        spawnFireParticle(b.x, b.y, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10);
+                    for (let p = 0; p < 20; p++) {
+                        spawnExhaustParticle(r.x, r.y, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10, r.color);
                     }
-                    balls.splice(i, 1);
+                    rockets.splice(i, 1);
                     continue;
                 }
 
@@ -232,22 +273,22 @@
                 const ax = acceleration * (dx / dist);
                 const ay = acceleration * (dy / dist);
 
-                b.vx += ax;
-                b.vy += ay;
-                b.x += b.vx;
-                b.y += b.vy;
+                r.vx += ax;
+                r.vy += ay;
+                r.x += r.vx;
+                r.y += r.vy;
 
                 // Record position history for trail
-                b.trail.push({ x: b.x, y: b.y });
-                if (b.trail.length > TRAIL_LENGTH) {
-                    b.trail.shift();
+                r.trail.push({ x: r.x, y: r.y });
+                if (r.trail.length > TRAIL_LENGTH) {
+                    r.trail.shift();
                 }
 
-                // Spawn tail flame particles
-                spawnFireParticle(b.x, b.y, b.vx, b.vy);
+                // Spawn exhaust trail particles
+                spawnExhaustParticle(r.x, r.y, r.vx, r.vy, r.color);
             }
 
-            // Update Fire/Spark Particles
+            // Update Particles
             for (let i = particles.length - 1; i >= 0; i--) {
                 const p = particles[i];
                 p.x += p.vx;
@@ -262,11 +303,11 @@
         }
 
         function draw() {
-            // Dark glowing space background
+            // Dark space background with subtle motion blur
             ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Central Gravity Node (Star / Void Core)
+            // 1. Central Gravity Node (Star Core)
             const nodeGlow = ctx.createRadialGradient(
                 centralNode.x, centralNode.y, 2,
                 centralNode.x, centralNode.y, centralNode.radius * 2.5
@@ -286,65 +327,93 @@
             ctx.fillStyle = '#ffffff';
             ctx.fill();
 
-            // 2. Draw Fire Trail Segments
-            for (const b of balls) {
-                const trailLen = b.trail.length;
+            // 2. Draw Color-Matched Trails
+            for (const r of rockets) {
+                const trailLen = r.trail.length;
                 for (let t = 1; t < trailLen; t++) {
-                    const p1 = b.trail[t - 1];
-                    const p2 = b.trail[t];
-                    const ratio = t / trailLen; // 0 at tail end, 1 at ball head
+                    const p1 = r.trail[t - 1];
+                    const p2 = r.trail[t];
+                    const ratio = t / trailLen;
 
                     ctx.beginPath();
                     ctx.moveTo(p1.x, p1.y);
                     ctx.lineTo(p2.x, p2.y);
-
-                    // Dynamic fiery trail styling
-                    ctx.lineWidth = ratio * (b.radius * 2);
-                    
-                    if (ratio < 0.3) {
-                        ctx.strokeStyle = `rgba(100, 0, 0, ${ratio * 2})`;
-                    } else if (ratio < 0.6) {
-                        ctx.strokeStyle = `rgba(255, 60, 0, ${ratio})`;
-                    } else if (ratio < 0.85) {
-                        ctx.strokeStyle = `rgba(255, 170, 0, ${ratio})`;
-                    } else {
-                        ctx.strokeStyle = `rgba(255, 255, 200, ${ratio})`;
-                    }
+                    ctx.lineWidth = ratio * 3.5;
+                    ctx.strokeStyle = r.color;
+                    ctx.globalAlpha = ratio * 0.6;
                     ctx.lineCap = 'round';
                     ctx.stroke();
                 }
-
-                // 3. Draw Fireball Head
-                const ballGlow = ctx.createRadialGradient(
-                    b.x, b.y, 1,
-                    b.x, b.y, b.radius * 2.2
-                );
-                ballGlow.addColorStop(0, '#ffffff');
-                ballGlow.addColorStop(0.3, '#ffff55');
-                ballGlow.addColorStop(0.6, '#ff6600');
-                ballGlow.addColorStop(0.9, '#cc0000');
-                ballGlow.addColorStop(1, 'rgba(200, 0, 0, 0)');
-
-                ctx.beginPath();
-                ctx.arc(b.x, b.y, b.radius * 2.2, 0, Math.PI * 2);
-                ctx.fillStyle = ballGlow;
-                ctx.fill();
+                ctx.globalAlpha = 1.0;
             }
 
-            // 4. Draw Ember Sparks & Flame Particles
+            // 3. Draw Rocket Vectors
+            for (const r of rockets) {
+                const angle = Math.atan2(r.vy, r.vx);
+
+                ctx.save();
+                ctx.translate(r.x, r.y);
+                ctx.rotate(angle);
+
+                // Main Rocket Body
+                ctx.fillStyle = r.color;
+                ctx.fillRect(-10, -4, 14, 8);
+
+                // Nose Cone
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.moveTo(4, -4);
+                ctx.lineTo(12, 0);
+                ctx.lineTo(4, 4);
+                ctx.closePath();
+                ctx.fill();
+
+                // Side Fins
+                ctx.fillStyle = '#ff3333';
+                ctx.beginPath();
+                ctx.moveTo(-10, -4);
+                ctx.lineTo(-14, -7);
+                ctx.lineTo(-6, -4);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.moveTo(-10, 4);
+                ctx.lineTo(-14, 7);
+                ctx.lineTo(-6, 4);
+                ctx.closePath();
+                ctx.fill();
+
+                // Cockpit Window
+                ctx.fillStyle = '#111122';
+                ctx.beginPath();
+                ctx.arc(-1, 0, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // Rocket Tail Flame
+                ctx.fillStyle = '#ffaa00';
+                ctx.beginPath();
+                ctx.moveTo(-10, -2);
+                ctx.lineTo(-15 - Math.random() * 5, 0);
+                ctx.lineTo(-10, 2);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            // 4. Draw Exhaust Particles
             for (const p of particles) {
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-
-                if (p.life > 0.6) {
-                    ctx.fillStyle = `rgba(255, 255, 180, ${p.life})`;
-                } else if (p.life > 0.3) {
-                    ctx.fillStyle = `rgba(255, 120, 0, ${p.life})`;
-                } else {
-                    ctx.fillStyle = `rgba(180, 20, 0, ${p.life})`;
-                }
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life;
                 ctx.fill();
             }
+            ctx.globalAlpha = 1.0;
         }
 
         function animate() {

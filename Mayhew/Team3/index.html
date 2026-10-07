@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gravity Physics Baseline - Rocket Edition</title>
+    <title>Gravity Physics Baseline - Galaxy & UFO Edition</title>
     <style>
         * {
             box-sizing: border-box;
@@ -14,7 +14,7 @@
         }
 
         body {
-            background-color: #000000;
+            background-color: #03030c;
             color: #ffffff;
             display: flex;
             flex-direction: column;
@@ -37,6 +37,7 @@
             border-bottom: 1px solid #ffffff;
             flex-wrap: wrap;
             gap: 10px;
+            z-index: 10;
         }
 
         h1 {
@@ -44,6 +45,7 @@
             letter-spacing: 2px;
             text-transform: uppercase;
             font-weight: bold;
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
         }
 
         .controls {
@@ -114,20 +116,22 @@
         }
 
         canvas {
-            background-color: #000000;
-            border: 1px solid #ffffff;
+            background-color: #020208;
+            border: 1px solid #555577;
             display: block;
             cursor: crosshair;
             width: 100%;
             height: 100%;
             touch-action: none;
+            box-shadow: 0 0 20px rgba(75, 156, 211, 0.2);
         }
 
         .instructions {
             margin-top: 8px;
             font-size: 11px;
-            color: #888888;
+            color: #aaaabb;
             text-align: center;
+            z-index: 10;
         }
     </style>
 </head>
@@ -158,7 +162,7 @@
     </div>
 
     <div class="instructions">
-        Click/tap to launch a rocket (1 launch/sec limit). Use Left/Right Arrow keys to steer, Spacebar to thrust.
+        Click/tap to launch a rocket (1 launch/sec limit). Use Left/Right Arrow keys to steer, Spacebar to thrust. Watch out for floating UFOs!
     </div>
 
     <script>
@@ -185,9 +189,13 @@
         const SPAM_LIMIT_MS = 1000;        // Spam click filter threshold (1 second)
         const ROTATION_SPEED = 0.08;       // Turning rate in radians per frame
         const THRUST_POWER = 0.18;         // Forward acceleration applied while holding Spacebar
+        const NUM_UFOS = 4;                // Number of floating alien UFOs
 
         // STATE VARIABLES
         let rockets = [];
+        let ufos = [];
+        let stars = [];
+        let starParticles = [];
         let currentPlanetKey = 'earth';
         let lastLaunchTime = 0;
         const keysPressed = {};
@@ -211,6 +219,43 @@
             keysPressed[e.key] = false;
         });
 
+        // Generate procedural background starfield
+        function createStarfield() {
+            stars = [];
+            const numStars = 180;
+            const starColors = ['#ffffff', '#ffe9c5', '#d4f0ff', '#f3d1ff'];
+            for (let i = 0; i < numStars; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    radius: Math.random() * 1.8 + 0.3,
+                    baseAlpha: Math.random() * 0.7 + 0.3,
+                    twinkleSpeed: Math.random() * 0.03 + 0.005,
+                    twinklePhase: Math.random() * Math.PI * 2,
+                    color: starColors[Math.floor(Math.random() * starColors.length)]
+                });
+            }
+        }
+
+        // Initialize floating UFOs with aliens
+        function createUFOs() {
+            ufos = [];
+            for (let i = 0; i < NUM_UFOS; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 1.2 + Math.random() * 1.5;
+                ufos.push({
+                    x: Math.random() * (canvas.width - 100) + 50,
+                    y: Math.random() * (canvas.height - 100) + 50,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    radius: 18,
+                    bobPhase: Math.random() * Math.PI * 2,
+                    alienColor: i % 2 === 0 ? '#39ff14' : '#00ffcc',
+                    lightsPhase: Math.random() * 100
+                });
+            }
+        }
+
         function resizeCanvas() {
             const wrapper = document.getElementById('canvas-wrapper');
             canvas.width = wrapper.clientWidth;
@@ -219,10 +264,14 @@
             // Recenter gravity node dynamically
             centralNode.x = canvas.width / 2;
             centralNode.y = canvas.height / 2;
+
+            createStarfield();
+            if (ufos.length === 0) {
+                createUFOs();
+            }
         }
 
         window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
 
         function changePlanet(planetKey) {
             if (PLANETS[planetKey]) {
@@ -266,7 +315,7 @@
                 vx: vx,
                 vy: vy,
                 angle: FIXED_LAUNCH_ANGLE,
-                radius: 6,
+                radius: 7,
                 isThrusting: false,
                 trail: []
             }];
@@ -274,10 +323,140 @@
 
         function resetSimulation() {
             rockets = [];
+            starParticles = [];
+            createUFOs();
+        }
+
+        // Spawns burst of star particles upon collision impact
+        function spawnImpactStars(x, y) {
+            const count = 12;
+            const starColors = ['#ffea00', '#ffffff', '#00e5ff', '#ff007f', '#76ff03'];
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 2 + Math.random() * 4.5;
+                starParticles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    size: Math.random() * 4 + 3,
+                    spikes: 5,
+                    life: 1.0,
+                    decay: Math.random() * 0.03 + 0.02,
+                    color: starColors[Math.floor(Math.random() * starColors.length)],
+                    rot: Math.random() * Math.PI * 2,
+                    rotSpeed: (Math.random() - 0.5) * 0.2
+                });
+            }
+        }
+
+        // Handle collision physics between Rocket and UFOs
+        function handleCollisions() {
+            for (let i = rockets.length - 1; i >= 0; i--) {
+                const r = rockets[i];
+
+                for (let j = 0; j < ufos.length; j++) {
+                    const ufo = ufos[j];
+
+                    const dx = ufo.x - r.x;
+                    const dy = ufo.y - r.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const minDist = r.radius + ufo.radius;
+
+                    if (dist < minDist && dist > 0) {
+                        // Collision normal vector
+                        const nx = dx / dist;
+                        const ny = dy / dist;
+
+                        // Separate shapes to avoid overlapping/sticking
+                        const overlap = minDist - dist;
+                        r.x -= nx * (overlap * 0.5);
+                        r.y -= ny * (overlap * 0.5);
+                        ufo.x += nx * (overlap * 0.5);
+                        ufo.y += ny * (overlap * 0.5);
+
+                        // Relative velocity along collision normal
+                        const kx = r.vx - ufo.vx;
+                        const ky = r.vy - ufo.vy;
+                        const p = 2 * (nx * kx + ny * ky) / 2;
+
+                        // Elastic velocity bounce exchange
+                        r.vx -= p * nx * 1.2;
+                        r.vy -= p * ny * 1.2;
+                        ufo.vx += p * nx * 0.8;
+                        ufo.vy += p * ny * 0.8;
+
+                        // Cap UFO speeds
+                        const ufoSpeed = Math.sqrt(ufo.vx * ufo.vx + ufo.vy * ufo.vy);
+                        if (ufoSpeed > 6) {
+                            ufo.vx = (ufo.vx / ufoSpeed) * 6;
+                            ufo.vy = (ufo.vy / ufoSpeed) * 6;
+                        }
+
+                        // Spawn impact stars at collision point
+                        const impactX = r.x + nx * r.radius;
+                        const impactY = r.y + ny * r.radius;
+                        spawnImpactStars(impactX, impactY);
+                    }
+                }
+            }
         }
 
         function updatePhysics() {
             const currentPlanet = PLANETS[currentPlanetKey];
+
+            // Update impact star particles
+            for (let i = starParticles.length - 1; i >= 0; i--) {
+                const p = starParticles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vx *= 0.96;
+                p.vy *= 0.96;
+                p.rot += p.rotSpeed;
+                p.life -= p.decay;
+                if (p.life <= 0) {
+                    starParticles.splice(i, 1);
+                }
+            }
+
+            // Update floating UFO movements
+            for (let u of ufos) {
+                u.x += u.vx;
+                u.y += u.vy;
+                u.bobPhase += 0.05;
+                u.lightsPhase += 0.1;
+
+                // Bounce off screen boundaries
+                if (u.x - u.radius < 0) {
+                    u.x = u.radius;
+                    u.vx *= -1;
+                } else if (u.x + u.radius > canvas.width) {
+                    u.x = canvas.width - u.radius;
+                    u.vx *= -1;
+                }
+
+                if (u.y - u.radius < 0) {
+                    u.y = u.radius;
+                    u.vy *= -1;
+                } else if (u.y + u.radius > canvas.height) {
+                    u.y = canvas.height - u.radius;
+                    u.vy *= -1;
+                }
+
+                // Bounce gently off central planet mass
+                const dxP = u.x - centralNode.x;
+                const dyP = u.y - centralNode.y;
+                const distP = Math.sqrt(dxP * dxP + dyP * dyP);
+                if (distP < centralNode.radius + u.radius) {
+                    const nx = dxP / distP;
+                    const ny = dyP / distP;
+                    u.x = centralNode.x + nx * (centralNode.radius + u.radius);
+                    u.y = centralNode.y + ny * (centralNode.radius + u.radius);
+                    const dot = u.vx * nx + u.vy * ny;
+                    u.vx -= 2 * dot * nx;
+                    u.vy -= 2 * dot * ny;
+                }
+            }
 
             // Input state checks
             const isLeft = keysPressed['ArrowLeft'] || keysPressed['a'] || keysPressed['A'];
@@ -318,6 +497,7 @@
 
                 // Absorption check: rocket collides with central planet mass
                 if (dist < centralNode.radius + r.radius) {
+                    spawnImpactStars(r.x, r.y);
                     rockets.splice(i, 1);
                     continue;
                 }
@@ -341,6 +521,160 @@
                     r.trail.shift();
                 }
             }
+
+            // Check for rocket vs UFO collisions
+            handleCollisions();
+        }
+
+        // Render cosmic galaxy nebula and twinkling stars background
+        function drawGalaxyBackground() {
+            // Dark cosmic baseline background
+            ctx.fillStyle = '#02020a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Purple and magenta cosmic nebula gradient
+            const g1 = ctx.createRadialGradient(
+                canvas.width * 0.3, canvas.height * 0.3, 20,
+                canvas.width * 0.3, canvas.height * 0.3, canvas.width * 0.5
+            );
+            g1.addColorStop(0, 'rgba(120, 40, 200, 0.25)');
+            g1.addColorStop(0.5, 'rgba(40, 20, 100, 0.12)');
+            g1.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = g1;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Cyan and deep blue cosmic nebula gradient
+            const g2 = ctx.createRadialGradient(
+                canvas.width * 0.75, canvas.height * 0.7, 30,
+                canvas.width * 0.75, canvas.height * 0.7, canvas.width * 0.45
+            );
+            g2.addColorStop(0, 'rgba(0, 150, 220, 0.22)');
+            g2.addColorStop(0.6, 'rgba(80, 0, 140, 0.1)');
+            g2.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = g2;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw twinkling background stars
+            for (let s of stars) {
+                s.twinklePhase += s.twinkleSpeed;
+                const alpha = s.baseAlpha + Math.sin(s.twinklePhase) * 0.25;
+                ctx.save();
+                ctx.globalAlpha = Math.max(0.1, Math.min(1.0, alpha));
+                ctx.fillStyle = s.color;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Draw impact star particles
+        function drawStarShape(cx, cy, spikes, outerRadius, innerRadius, color, alpha, rotation) {
+            let rot = rotation || (Math.PI / 2 * 3);
+            let step = Math.PI / spikes;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = color;
+
+            ctx.moveTo(cx + Math.cos(rot) * outerRadius, cy + Math.sin(rot) * outerRadius);
+            for (let i = 0; i < spikes; i++) {
+                rot += step;
+                ctx.lineTo(cx + Math.cos(rot) * innerRadius, cy + Math.sin(rot) * innerRadius);
+                rot += step;
+                ctx.lineTo(cx + Math.cos(rot) * outerRadius, cy + Math.sin(rot) * outerRadius);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // Render UFO graphic with cute alien inside
+        function drawUFO(ufo) {
+            const bobY = ufo.y + Math.sin(ufo.bobPhase) * 3;
+
+            ctx.save();
+            ctx.translate(ufo.x, bobY);
+
+            // UFO Outer Glow Aura
+            const auraGlow = ctx.createRadialGradient(0, 0, 5, 0, 0, ufo.radius + 6);
+            auraGlow.addColorStop(0, 'rgba(0, 255, 200, 0.3)');
+            auraGlow.addColorStop(1, 'rgba(0, 255, 200, 0)');
+            ctx.fillStyle = auraGlow;
+            ctx.beginPath();
+            ctx.arc(0, 0, ufo.radius + 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Glass Dome
+            ctx.beginPath();
+            ctx.arc(0, -3, 10, Math.PI, 0, false);
+            ctx.fillStyle = 'rgba(160, 240, 255, 0.65)';
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Alien Inside Dome
+            // Head
+            ctx.beginPath();
+            ctx.ellipse(0, -5, 5, 6, 0, 0, Math.PI * 2);
+            ctx.fillStyle = ufo.alienColor;
+            ctx.fill();
+
+            // Eyes
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            ctx.ellipse(-2, -6, 1.8, 2.5, -0.2, 0, Math.PI * 2);
+            ctx.ellipse(2, -6, 1.8, 2.5, 0.2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Eye shine dots
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(-2.5, -7, 0.6, 0, Math.PI * 2);
+            ctx.arc(1.5, -7, 0.6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Antenna
+            ctx.beginPath();
+            ctx.moveTo(0, -11);
+            ctx.lineTo(0, -15);
+            ctx.strokeStyle = ufo.alienColor;
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(0, -15, 2, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffff00';
+            ctx.fill();
+
+            // Metallic Saucer Body
+            ctx.beginPath();
+            ctx.ellipse(0, 2, ufo.radius, 7, 0, 0, Math.PI * 2);
+            const saucerGrad = ctx.createLinearGradient(-ufo.radius, 0, ufo.radius, 0);
+            saucerGrad.addColorStop(0, '#778899');
+            saucerGrad.addColorStop(0.5, '#e0e8f0');
+            saucerGrad.addColorStop(1, '#556677');
+            ctx.fillStyle = saucerGrad;
+            ctx.fill();
+            ctx.strokeStyle = '#334455';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Blinking Saucer Lights
+            const numLights = 5;
+            for (let l = 0; l < numLights; l++) {
+                const lx = -ufo.radius + 6 + (l * (ufo.radius * 2 - 12) / (numLights - 1));
+                const ly = 3;
+                const lightActive = Math.floor(ufo.lightsPhase + l) % 2 === 0;
+                ctx.beginPath();
+                ctx.arc(lx, ly, 1.8, 0, Math.PI * 2);
+                ctx.fillStyle = lightActive ? '#ff0055' : '#00ffff';
+                ctx.fill();
+            }
+
+            ctx.restore();
         }
 
         function drawRocket(r) {
@@ -358,6 +692,16 @@
                 ctx.closePath();
                 ctx.fillStyle = '#ff6600';
                 ctx.fill();
+
+                // Inner flame core
+                ctx.beginPath();
+                ctx.moveTo(-5, 0);
+                ctx.lineTo(-10, -2);
+                ctx.lineTo(-13, 0);
+                ctx.lineTo(-10, 2);
+                ctx.closePath();
+                ctx.fillStyle = '#ffff00';
+                ctx.fill();
             }
 
             // Sleek Rocket Body & Fins
@@ -369,7 +713,7 @@
             ctx.closePath();
             ctx.fillStyle = '#ffffff';
             ctx.fill();
-            ctx.strokeStyle = '#ffffff';
+            ctx.strokeStyle = '#3388ff';
             ctx.lineWidth = 1;
             ctx.stroke();
 
@@ -379,11 +723,22 @@
         function draw() {
             const currentPlanet = PLANETS[currentPlanetKey];
 
-            // Clear canvas background
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // 1. Draw Galaxy and Stars Background
+            drawGalaxyBackground();
 
-            // 1. Draw Central Planet Node
+            // 2. Draw Central Planet Node with atmospheric glow
+            const planetGlow = ctx.createRadialGradient(
+                centralNode.x, centralNode.y, centralNode.radius * 0.8,
+                centralNode.x, centralNode.y, centralNode.radius * 1.6
+            );
+            planetGlow.addColorStop(0, currentPlanet.color);
+            planetGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = planetGlow;
+            ctx.beginPath();
+            ctx.arc(centralNode.x, centralNode.y, centralNode.radius * 1.6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Main Planet body
             ctx.beginPath();
             ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
             ctx.fillStyle = currentPlanet.color;
@@ -395,22 +750,30 @@
             ctx.fillStyle = '#000000';
             ctx.fill();
 
-            // 2. Draw Rocket & Path Trail
+            // 3. Draw UFOs with Aliens
+            for (const ufo of ufos) {
+                drawUFO(ufo);
+            }
+
+            // 4. Draw Rocket & Path Trail
             for (const r of rockets) {
-                // Draw path line
                 if (r.trail.length > 1) {
                     ctx.beginPath();
                     ctx.moveTo(r.trail[0].x, r.trail[0].y);
                     for (let t = 1; t < r.trail.length; t++) {
                         ctx.lineTo(r.trail[t].x, r.trail[t].y);
                     }
-                    ctx.strokeStyle = '#ffffff';
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
                     ctx.lineWidth = 1.2;
                     ctx.stroke();
                 }
 
-                // Draw Rocket Graphic
                 drawRocket(r);
+            }
+
+            // 5. Draw Impact Star Burst Particles
+            for (const p of starParticles) {
+                drawStarShape(p.x, p.y, p.spikes, p.size, p.size * 0.4, p.color, p.life, p.rot);
             }
         }
 
@@ -421,6 +784,7 @@
         }
 
         window.onload = function() {
+            resizeCanvas();
             animate();
         };
     </script>
