@@ -49,7 +49,14 @@
         .controls {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .planet-label {
@@ -57,6 +64,12 @@
             font-weight: bold;
             letter-spacing: 1px;
             text-transform: uppercase;
+        }
+
+        .slider-select {
+            accent-color: #ffffff;
+            cursor: pointer;
+            width: 110px;
         }
 
         .dropdown-select {
@@ -137,17 +150,27 @@
     <div id="header">
         <h1>Gravity Simulation</h1>
         <div class="controls">
-            <label for="planetSelect" class="planet-label">Planet:</label>
-            <select id="planetSelect" class="dropdown-select" onchange="changePlanet(this.value)">
-                <option value="mercury">Mercury</option>
-                <option value="venus">Venus</option>
-                <option value="earth" selected>Earth</option>
-                <option value="mars">Mars</option>
-                <option value="jupiter">Jupiter</option>
-                <option value="saturn">Saturn</option>
-                <option value="uranus">Uranus</option>
-                <option value="neptune">Neptune</option>
-            </select>
+            <!-- Rocket Quantity Control -->
+            <div class="control-group">
+                <label for="rocketSlider" class="planet-label">Rockets: <span id="rocketVal">1</span></label>
+                <input type="range" id="rocketSlider" class="slider-select" min="1" max="30" value="1" oninput="updateRocketCount(this.value)">
+            </div>
+
+            <!-- Planet Select Control -->
+            <div class="control-group">
+                <label for="planetSelect" class="planet-label">Planet:</label>
+                <select id="planetSelect" class="dropdown-select" onchange="changePlanet(this.value)">
+                    <option value="mercury">Mercury</option>
+                    <option value="venus">Venus</option>
+                    <option value="earth" selected>Earth</option>
+                    <option value="mars">Mars</option>
+                    <option value="jupiter">Jupiter</option>
+                    <option value="saturn">Saturn</option>
+                    <option value="uranus">Uranus</option>
+                    <option value="neptune">Neptune</option>
+                </select>
+            </div>
+
             <button class="btn-reset" onclick="resetSimulation()">Reset</button>
         </div>
     </div>
@@ -158,7 +181,7 @@
     </div>
 
     <div class="instructions">
-        Click or tap anywhere on the canvas to launch a ball (1 launch per second). Asteroids bounce balls and spawn new ones!
+        Click or tap anywhere on the canvas to launch rockets (1 launch per second). Asteroids bounce rockets and spawn new ones!
     </div>
 
     <script>
@@ -178,19 +201,19 @@
         };
 
         // SIMULATION CONSTANTS
-        const LAUNCH_VELOCITY = 5;         // Fixed velocity on click
-        const FIXED_LAUNCH_ANGLE = 90;     // Fixed direction in degrees (90° = straight right)
-        const TRAIL_LENGTH = 300;         // Number of historic trail points stored
-        const SOFTENING_FACTOR = 400;     // Prevents infinite velocity near center
+        const LAUNCH_VELOCITY = 5;         // Velocity of launched rockets
+        const TRAIL_LENGTH = 300;          // Number of historic trail points stored
+        const SOFTENING_FACTOR = 400;      // Prevents infinite velocity near center
         const SPAM_LIMIT_MS = 1000;        // Spam click filter threshold (1 second)
         const NUM_ASTEROIDS = 6;           // Number of floating asteroids in scene
-        const MAX_BALLS = 40;              // Maximum balls on screen to protect Chromebook performance
+        const MAX_BALLS = 120;             // Upper cap on screen objects to preserve Chromebook performance
 
         // STATE VARIABLES
         let balls = [];
         let asteroids = [];
         let currentPlanetKey = 'earth';
         let lastLaunchTime = 0;
+        let rocketsPerLaunch = 1;
 
         // Central Gravity Node Definition
         const centralNode = {
@@ -198,6 +221,11 @@
             y: 0,
             radius: PLANETS[currentPlanetKey].radius
         };
+
+        function updateRocketCount(val) {
+            rocketsPerLaunch = parseInt(val, 10) || 1;
+            document.getElementById('rocketVal').textContent = rocketsPerLaunch;
+        }
 
         function createAsteroids() {
             asteroids = [];
@@ -280,17 +308,23 @@
             }
 
             lastLaunchTime = now;
-            launchBall(clickX, clickY);
+            launchRockets(clickX, clickY);
         }
 
         canvas.addEventListener('click', handleInput);
 
-        function launchBall(x, y) {
-            const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
-            const vx = LAUNCH_VELOCITY * Math.sin(rad);  
-            const vy = -LAUNCH_VELOCITY * Math.cos(rad); 
+        function launchRockets(x, y) {
+            const count = rocketsPerLaunch;
+            const angleStep = (2 * Math.PI) / count;
 
-            if (balls.length < MAX_BALLS) {
+            for (let i = 0; i < count; i++) {
+                if (balls.length >= MAX_BALLS) break;
+
+                // Calculate radial angle spread evenly in 360 degrees
+                const angle = i * angleStep;
+                const vx = LAUNCH_VELOCITY * Math.cos(angle);
+                const vy = LAUNCH_VELOCITY * Math.sin(angle);
+
                 balls.push({
                     x: x,
                     y: y,
