@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gravity Physics - Portals & Wall Bounce</title>
+    <title>Gravity Physics - Portals, Asteroids & Triangles</title>
     <style>
         * {
             box-sizing: border-box;
@@ -154,10 +154,10 @@
         <canvas id="simCanvas"></canvas>
     </div>
 
-    <!-- Instructions & Cooldown Indicator -->
+    <!-- Instructions, Ball Counter & Cooldown Indicator -->
     <div class="instructions-bar">
         <span id="instruction-text">Mode: Launch Ball — Click/Tap canvas to spawn a ball.</span>
-        <div>Spam Filter: <span id="spam-status" class="status-ready">READY</span></div>
+        <div>Balls: <span id="ball-count">0</span>/30 | Spam Filter: <span id="spam-status" class="status-ready">READY</span></div>
     </div>
 
     <script>
@@ -172,12 +172,15 @@
         const SOFTENING_FACTOR = 400;     // Prevents infinite velocity near center
         const SPAM_COOLDOWN_MS = 1000;    // 1-second delay between launches
         const WALL_BOUNCE_RESTITUTION = 0.85; // Bounciness off outer walls
+        const MAX_BALLS = 30;              // Maximum onscreen ball cap
 
         // STATE VARIABLES
         let currentMode = 'ball';          // 'ball' or 'portal'
         let lastLaunchTime = 0;           // Timestamp for spam-click filter
         let balls = [];
         let portals = [];                 // Array holding up to 2 portal objects
+        let asteroids = [];               // Floating asteroids that clone balls
+        let triangles = [];               // Floating triangles that reflect balls
         let portalPulseAngle = 0;         // For portal visual animation
 
         // Central Gravity Node Definition
@@ -199,6 +202,49 @@
 
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
+
+        function initSpaceObjects() {
+            asteroids = [];
+            triangles = [];
+
+            // Spawn floating Asteroids
+            for (let i = 0; i < 3; i++) {
+                const radius = 25 + Math.random() * 15;
+                const numPoints = 8;
+                const points = [];
+                for (let j = 0; j < numPoints; j++) {
+                    const angle = (j / numPoints) * Math.PI * 2;
+                    const rOffset = radius * (0.8 + Math.random() * 0.4);
+                    points.push({ angle, rOffset });
+                }
+                asteroids.push({
+                    x: Math.random() * (canvas.width - 120) + 60,
+                    y: Math.random() * (canvas.height - 120) + 60,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2,
+                    radius: radius,
+                    angle: Math.random() * Math.PI * 2,
+                    rotSpeed: (Math.random() - 0.5) * 0.02,
+                    points: points
+                });
+            }
+
+            // Spawn floating Triangles
+            for (let i = 0; i < 3; i++) {
+                const radius = 20 + Math.random() * 10;
+                triangles.push({
+                    x: Math.random() * (canvas.width - 120) + 60,
+                    y: Math.random() * (canvas.height - 120) + 60,
+                    vx: (Math.random() - 0.5) * 2.5,
+                    vy: (Math.random() - 0.5) * 2.5,
+                    radius: radius,
+                    angle: Math.random() * Math.PI * 2,
+                    rotSpeed: (Math.random() - 0.5) * 0.03
+                });
+            }
+        }
+
+        initSpaceObjects();
 
         function setMode(mode) {
             currentMode = mode;
@@ -240,6 +286,11 @@
                 return;
             }
 
+            // Enforce maximum 30 balls limit
+            if (balls.length >= MAX_BALLS) {
+                return;
+            }
+
             lastLaunchTime = now;
             updateSpamUI();
 
@@ -248,8 +299,8 @@
             const vx = LAUNCH_VELOCITY * Math.sin(rad);  
             const vy = -LAUNCH_VELOCITY * Math.cos(rad); 
 
-            // Spawn new ball (resets ball list to maintain single active ball standard)
-            balls = [{
+            // Spawn new ball into state array
+            balls.push({
                 x: x,
                 y: y,
                 vx: vx,
@@ -259,7 +310,7 @@
                 scaleY: 1.0,               // Vertical deformation scale factor
                 teleportCooldown: 0,      // Cooldown timer to prevent infinite teleport loop
                 trail: []
-            }];
+            });
         }
 
         function placePortal(x, y) {
@@ -280,8 +331,6 @@
             } else {
                 // Replace oldest portal (cycle between 0 and 1)
                 portals.shift();
-                const colorScheme = portalColors[1];
-                // Relabel remaining portal as #1 and new one as #2
                 portals[0].border = portalColors[0].border;
                 portals[0].core = portalColors[0].core;
                 portals[0].label = '1';
@@ -304,6 +353,7 @@
         function resetSimulation() {
             balls = [];
             portals = [];
+            initSpaceObjects();
         }
 
         function flashSpamWarning() {
@@ -324,6 +374,30 @@
         }
 
         function updatePhysics() {
+            // Update Floating Asteroid Positions
+            for (const ast of asteroids) {
+                ast.x += ast.vx;
+                ast.y += ast.vy;
+                ast.angle += ast.rotSpeed;
+
+                if (ast.x < -ast.radius) ast.x = canvas.width + ast.radius;
+                if (ast.x > canvas.width + ast.radius) ast.x = -ast.radius;
+                if (ast.y < -ast.radius) ast.y = canvas.height + ast.radius;
+                if (ast.y > canvas.height + ast.radius) ast.y = -ast.radius;
+            }
+
+            // Update Floating Triangle Positions
+            for (const tri of triangles) {
+                tri.x += tri.vx;
+                tri.y += tri.vy;
+                tri.angle += tri.rotSpeed;
+
+                if (tri.x < -tri.radius) tri.x = canvas.width + tri.radius;
+                if (tri.x > canvas.width + tri.radius) tri.x = -tri.radius;
+                if (tri.y < -tri.radius) tri.y = canvas.height + tri.radius;
+                if (tri.y > canvas.height + tri.radius) tri.y = -tri.radius;
+            }
+
             for (let i = balls.length - 1; i >= 0; i--) {
                 const b = balls[i];
 
@@ -354,90 +428,143 @@
                 b.x += b.vx;
                 b.y += b.vy;
 
-                // 2. Wall Collision & Deformation Logic (Squash & Stretch Bounce)
-                let bounced = false;
-
-                // Left Wall Collision
+                // 2. Wall Collision & Deformation Logic
                 if (b.x - b.radius <= 0) {
                     b.x = b.radius;
                     b.vx = -b.vx * WALL_BOUNCE_RESTITUTION;
-                    b.scaleX = 0.4;  // Squash horizontally
-                    b.scaleY = 1.6;  // Stretch vertically
-                    bounced = true;
-                } 
-                // Right Wall Collision
-                else if (b.x + b.radius >= canvas.width) {
+                    b.scaleX = 0.4;
+                    b.scaleY = 1.6;
+                } else if (b.x + b.radius >= canvas.width) {
                     b.x = canvas.width - b.radius;
                     b.vx = -b.vx * WALL_BOUNCE_RESTITUTION;
                     b.scaleX = 0.4;
                     b.scaleY = 1.6;
-                    bounced = true;
                 }
 
-                // Top Wall Collision
                 if (b.y - b.radius <= 0) {
                     b.y = b.radius;
                     b.vy = -b.vy * WALL_BOUNCE_RESTITUTION;
-                    b.scaleX = 1.6;  // Stretch horizontally
-                    b.scaleY = 0.4;  // Squash vertically
-                    bounced = true;
-                } 
-                // Bottom Wall Collision
-                else if (b.y + b.radius >= canvas.height) {
+                    b.scaleX = 1.6;
+                    b.scaleY = 0.4;
+                } else if (b.y + b.radius >= canvas.height) {
                     b.y = canvas.height - b.radius;
                     b.vy = -b.vy * WALL_BOUNCE_RESTITUTION;
                     b.scaleX = 1.6;
                     b.scaleY = 0.4;
-                    bounced = true;
                 }
 
-                // Smoothly decay ball deformation back to normal circle (scale = 1.0)
+                // Smoothly decay ball deformation back to circle (scale = 1.0)
                 b.scaleX += (1.0 - b.scaleX) * 0.18;
                 b.scaleY += (1.0 - b.scaleY) * 0.18;
 
-                // 3. Portal Teleportation Logic
+                // 3. Asteroid Collision & Ball Spawning Logic
+                for (const ast of asteroids) {
+                    const adx = b.x - ast.x;
+                    const ady = b.y - ast.y;
+                    const adist = Math.hypot(adx, ady);
+                    const minDist = b.radius + ast.radius;
+
+                    if (adist < minDist && adist > 0) {
+                        const nx = adx / adist;
+                        const ny = ady / adist;
+
+                        // Separate ball from asteroid
+                        b.x = ast.x + nx * (minDist + 1);
+                        b.y = ast.y + ny * (minDist + 1);
+
+                        // Reflect velocity vector off asteroid surface
+                        const dot = b.vx * nx + b.vy * ny;
+                        if (dot < 0) {
+                            b.vx -= 2 * dot * nx;
+                            b.vy -= 2 * dot * ny;
+                        }
+
+                        // Spawn additional ball if under the 30-ball maximum onscreen cap
+                        if (balls.length < MAX_BALLS) {
+                            const angleOffset = Math.PI / 4;
+                            const cos = Math.cos(angleOffset);
+                            const sin = Math.sin(angleOffset);
+                            const spawnVx = b.vx * cos - b.vy * sin;
+                            const spawnVy = b.vx * sin + b.vy * cos;
+
+                            balls.push({
+                                x: b.x + nx * (b.radius * 2 + 2),
+                                y: b.y + ny * (b.radius * 2 + 2),
+                                vx: spawnVx,
+                                vy: spawnVy,
+                                radius: b.radius,
+                                scaleX: 1.0,
+                                scaleY: 1.0,
+                                teleportCooldown: 10,
+                                trail: []
+                            });
+                        }
+                        break;
+                    }
+                }
+
+                // 4. Triangle Collision Logic (Bounce only, NO ball spawn)
+                for (const tri of triangles) {
+                    const tdx = b.x - tri.x;
+                    const tdy = b.y - tri.y;
+                    const tdist = Math.hypot(tdx, tdy);
+                    const minDist = b.radius + tri.radius;
+
+                    if (tdist < minDist && tdist > 0) {
+                        const nx = tdx / tdist;
+                        const ny = tdy / tdist;
+
+                        // Separate ball from triangle surface
+                        b.x = tri.x + nx * (minDist + 1);
+                        b.y = tri.y + ny * (minDist + 1);
+
+                        // Reflect velocity vector
+                        const dot = b.vx * nx + b.vy * ny;
+                        if (dot < 0) {
+                            b.vx -= 2 * dot * nx;
+                            b.vy -= 2 * dot * ny;
+                        }
+                        break;
+                    }
+                }
+
+                // 5. Portal Teleportation Logic
                 if (portals.length === 2 && b.teleportCooldown === 0) {
                     for (let pIdx = 0; pIdx < 2; pIdx++) {
                         const inPortal = portals[pIdx];
-                        const outPortal = portals[1 - pIdx]; // The other portal
+                        const outPortal = portals[1 - pIdx];
 
                         const pdx = inPortal.x - b.x;
                         const pdy = inPortal.y - b.y;
                         const pDist = Math.sqrt(pdx * pdx + pdy * pdy);
 
-                        // If ball touches portal ring
                         if (pDist < inPortal.radius + b.radius) {
-                            // Calculate current speed magnitude
-                            const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy) || 1;
-
-                            // Teleport position to exit portal with an outward offset
                             const exitAngle = Math.atan2(b.vy, b.vx);
                             b.x = outPortal.x + Math.cos(exitAngle) * (outPortal.radius + b.radius + 4);
                             b.y = outPortal.y + Math.sin(exitAngle) * (outPortal.radius + b.radius + 4);
 
-                            // Set teleport cooldown to prevent instant re-entry
                             b.teleportCooldown = 20;
-
-                            // Clear trail jump line to keep drawing clean
                             b.trail = [];
                             break;
                         }
                     }
                 }
 
-                // Record position history for line trail
+                // Record position history for trail
                 b.trail.push({ x: b.x, y: b.y });
                 if (b.trail.length > TRAIL_LENGTH) {
                     b.trail.shift();
                 }
             }
 
-            // Update portal animation pulse
+            // Update UI ball counter
+            const ballCountElem = document.getElementById('ball-count');
+            if (ballCountElem) ballCountElem.textContent = balls.length;
+
             portalPulseAngle += 0.05;
         }
 
         function draw() {
-            // Clear canvas background
             ctx.fillStyle = '#000000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -452,18 +579,68 @@
             ctx.fillStyle = '#000000';
             ctx.fill();
 
-            // 2. Draw Portals
+            // 2. Draw Floating Asteroids
+            for (const ast of asteroids) {
+                ctx.save();
+                ctx.translate(ast.x, ast.y);
+                ctx.rotate(ast.angle);
+
+                ctx.beginPath();
+                for (let p = 0; p < ast.points.length; p++) {
+                    const pt = ast.points[p];
+                    const px = Math.cos(pt.angle) * pt.rOffset;
+                    const py = Math.sin(pt.angle) * pt.rOffset;
+                    if (p === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+
+                ctx.fillStyle = '#2a2a35';
+                ctx.fill();
+                ctx.strokeStyle = '#aaaaaa';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.restore();
+            }
+
+            // 3. Draw Floating Triangles
+            for (const tri of triangles) {
+                ctx.save();
+                ctx.translate(tri.x, tri.y);
+                ctx.rotate(tri.angle);
+
+                ctx.beginPath();
+                for (let p = 0; p < 3; p++) {
+                    const angle = (p * 2 * Math.PI) / 3;
+                    const px = Math.cos(angle) * tri.radius;
+                    const py = Math.sin(angle) * tri.radius;
+                    if (p === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+
+                ctx.fillStyle = '#ff007f';
+                ctx.globalAlpha = 0.8;
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.restore();
+            }
+
+            // 4. Draw Portals
             for (const p of portals) {
                 const pulseRadius = p.radius + Math.sin(portalPulseAngle) * 3;
 
-                // Glowing outer ring
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, pulseRadius, 0, Math.PI * 2);
                 ctx.strokeStyle = p.border;
                 ctx.lineWidth = 3;
                 ctx.stroke();
 
-                // Inner core
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.radius * 0.6, 0, Math.PI * 2);
                 ctx.fillStyle = p.core;
@@ -471,7 +648,6 @@
                 ctx.fill();
                 ctx.globalAlpha = 1.0;
 
-                // Label Portal Number
                 ctx.fillStyle = '#ffffff';
                 ctx.font = 'bold 12px Courier New';
                 ctx.textAlign = 'center';
@@ -479,9 +655,8 @@
                 ctx.fillText(p.label, p.x, p.y);
             }
 
-            // 3. Draw Ball & Trail
+            // 5. Draw Balls & Trails
             for (const b of balls) {
-                // Draw path line trail
                 if (b.trail.length > 1) {
                     ctx.beginPath();
                     ctx.moveTo(b.trail[0].x, b.trail[0].y);
@@ -493,7 +668,6 @@
                     ctx.stroke();
                 }
 
-                // Draw deforming ball object (Squash & Stretch on wall bounce)
                 ctx.save();
                 ctx.translate(b.x, b.y);
                 ctx.scale(b.scaleX, b.scaleY);
