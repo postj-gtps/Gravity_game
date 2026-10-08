@@ -194,7 +194,7 @@
   </div>
 
   <div class="instructions">
-    Tap or click on the canvas to set an active launch pad. Astronauts will auto-launch 1x per second!
+    Tap or click on the canvas to set an active launch pad. Astronauts will auto-launch max 1x per second!
   </div>
 
   <script>
@@ -211,6 +211,7 @@
     const TRAIL_LENGTH = 200;
     const SOFTENING_FACTOR = 400;
     const ABSOLUTE_MAX_CAP = 50;   // Hard limit enforced across simulation
+    const SPAM_COOLDOWN_MS = 1000;  // Spam-click filter limit: max 1 launch per second
 
     // DYNAMIC STATE VARIABLES
     let launchVelocity = 5;
@@ -218,6 +219,7 @@
     let astronauts = [];
     let launchPoint = null;        // Active auto-clicker location {x, y}
     let autoLauncherTimer = null;
+    let lastSpawnTime = 0;         // Timestamp tracking for spam-click filter
 
     // Central Gravity Node (Earth)
     const centralNode = {
@@ -305,7 +307,7 @@
     }
 
     /* -------------------------------------------------------------------------
-       AUTO-CLICKER & INPUT HANDLING (1 Astronaut per second from active target)
+       AUTO-CLICKER & INPUT HANDLING WITH SPAM-CLICK FILTER
        ------------------------------------------------------------------------- */
     function handlePointerDown(e) {
       e.preventDefault();
@@ -320,18 +322,25 @@
           y: clientY - rect.top
         };
 
-        // Fire immediately on click
+        // Attempt launch on click (throttled by spam filter)
         spawnAstronaut();
 
-        // Start 1 per second auto-clicker interval if not running
+        // Ensure auto-launcher loop runs every 100ms to spawn when 1 second elapses
         if (!autoLauncherTimer) {
-          autoLauncherTimer = setInterval(spawnAstronaut, 1000);
+          autoLauncherTimer = setInterval(spawnAstronaut, 100);
         }
       }
     }
 
     function spawnAstronaut() {
       if (!launchPoint) return;
+
+      const now = Date.now();
+
+      // SPAM-CLICK FILTER: Block spawns if less than 1000ms has elapsed
+      if (now - lastSpawnTime < SPAM_COOLDOWN_MS) {
+        return;
+      }
 
       // Strict enforcement: slider ceiling & absolute max 50 onscreen limit
       const currentLimit = Math.min(maxAstronauts, ABSOLUTE_MAX_CAP);
@@ -353,6 +362,8 @@
         rotSpeed: (Math.random() - 0.5) * 0.03,
         trail: []
       });
+
+      lastSpawnTime = now;
     }
 
     canvas.addEventListener('pointerdown', handlePointerDown);
@@ -362,6 +373,7 @@
     function resetSimulation() {
       astronauts = [];
       launchPoint = null;
+      lastSpawnTime = 0;
       if (autoLauncherTimer) {
         clearInterval(autoLauncherTimer);
         autoLauncherTimer = null;
