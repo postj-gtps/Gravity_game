@@ -35,6 +35,8 @@
       margin-bottom: 12px;
       padding-bottom: 8px;
       border-bottom: 1px solid #ffffff;
+      flex-wrap: wrap;
+      gap: 10px;
     }
 
     h1 {
@@ -46,7 +48,26 @@
 
     .header-controls {
       display: flex;
-      gap: 10px;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .slider-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border: 1px solid #ffffff;
+      padding: 5px 10px;
+    }
+
+    .slider-control input[type="range"] {
+      cursor: pointer;
+      accent-color: #ffffff;
+      width: 90px;
     }
 
     .btn-action {
@@ -101,6 +122,10 @@
   <div id="header">
     <h1>Gravity Simulation</h1>
     <div class="header-controls">
+      <div class="slider-control">
+        <label for="speedSlider">Speed: <span id="speedValue">5</span></label>
+        <input type="range" id="speedSlider" min="1" max="25" value="5" step="1" oninput="updateLaunchSpeed(this.value)">
+      </div>
       <button id="wallsToggleBtn" class="btn-action" onclick="toggleBouncyWalls()">Walls: OFF</button>
       <button class="btn-action" onclick="resetSimulation()">Reset</button>
     </div>
@@ -121,7 +146,6 @@
 
     // SIMULATION CONSTANTS
     const GRAVITY_CONSTANT = 1800; // Strength of gravitational pull (G)
-    const LAUNCH_VELOCITY = 5; // Fixed launch velocity
     const BALL_COUNT = 10; // Number of balls launched per click
     const ANGLE_STEP = 360 / BALL_COUNT; // Equal spacing across 360 degrees (36°)
     const TRAIL_LENGTH = 300; // Historic trail points stored per ball
@@ -130,6 +154,7 @@
     const SPAM_COOLDOWN_MS = 1000; // Spam-click filter: 1 launch per second
 
     // STATE VARIABLES
+    let launchVelocity = 5; // Launch speed configurable via slider
     let balls = [];
     let sparkles = [];
     let portals = [];
@@ -142,6 +167,11 @@
       y: 0,
       radius: 12
     };
+
+    function updateLaunchSpeed(val) {
+      launchVelocity = parseFloat(val);
+      document.getElementById('speedValue').textContent = val;
+    }
 
     function updatePortalPositions() {
       // Define 4 corner portals and their inward launch directions
@@ -199,8 +229,8 @@
         const angleDegrees = i * ANGLE_STEP;
         const rad = (angleDegrees * Math.PI) / 180;
         
-        const vx = LAUNCH_VELOCITY * Math.sin(rad);
-        const vy = -LAUNCH_VELOCITY * Math.cos(rad);
+        const vx = launchVelocity * Math.sin(rad);
+        const vy = -launchVelocity * Math.cos(rad);
 
         balls.push({
           x: x,

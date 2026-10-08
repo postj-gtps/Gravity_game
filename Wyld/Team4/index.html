@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gravity Physics Baseline</title>
+  <title>Halloween Gravity Simulation</title>
   <style>
     * {
       box-sizing: border-box;
@@ -14,8 +14,8 @@
     }
 
     body {
-      background-color: #03030a;
-      color: #ffffff;
+      background-color: #05020a;
+      color: #ffaa00;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -34,7 +34,7 @@
       max-width: 1100px;
       margin-bottom: 12px;
       padding-bottom: 8px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+      border-bottom: 1px solid rgba(255, 136, 0, 0.4);
     }
 
     h1 {
@@ -42,13 +42,14 @@
       letter-spacing: 2px;
       text-transform: uppercase;
       font-weight: bold;
-      text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+      color: #ff8800;
+      text-shadow: 0 0 10px rgba(255, 136, 0, 0.8);
     }
 
     .btn-reset {
-      background: rgba(255, 255, 255, 0.1);
-      color: #ffffff;
-      border: 1px solid #ffffff;
+      background: rgba(255, 136, 0, 0.15);
+      color: #ffaa00;
+      border: 1px solid #ff8800;
       padding: 6px 16px;
       font-size: 14px;
       font-weight: bold;
@@ -60,9 +61,9 @@
     }
 
     .btn-reset:hover {
-      background: #ffffff;
+      background: #ff8800;
       color: #000000;
-      box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+      box-shadow: 0 0 12px rgba(255, 136, 0, 0.9);
     }
 
     /* Main Canvas Container */
@@ -77,20 +78,20 @@
     }
 
     canvas {
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      border: 1px solid rgba(255, 136, 0, 0.3);
       display: block;
       cursor: crosshair;
       width: 100%;
       height: 100%;
       border-radius: 6px;
-      box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+      box-shadow: 0 0 25px rgba(0, 0, 0, 0.9);
       touch-action: none;
     }
 
     .instructions {
       margin-top: 8px;
       font-size: 11px;
-      color: #aaaaaa;
+      color: #bb88ff;
       text-align: center;
     }
   </style>
@@ -99,7 +100,7 @@
 
   <!-- Header Section -->
   <div id="header">
-    <h1>Gravity Simulation</h1>
+    <h1>Spooky Gravity Simulation</h1>
     <button class="btn-reset" onclick="resetSimulation()">Reset</button>
   </div>
 
@@ -109,14 +110,14 @@
   </div>
 
   <div class="instructions">
-    Click or tap anywhere on the canvas to launch a ball.
+    Click or tap anywhere on the canvas to launch candy corn! (1 sec cooldown)
   </div>
 
   <script>
     const canvas = document.getElementById('simCanvas');
     const ctx = canvas.getContext('2d');
 
-    // OFFSCREEN CANVAS FOR COSMIC BACKGROUND BUFFER
+    // OFFSCREEN CANVAS FOR HALLOWEEN BACKGROUND BUFFER
     const bgCanvas = document.createElement('canvas');
     const bgCtx = bgCanvas.getContext('2d');
 
@@ -126,47 +127,45 @@
     const FIXED_LAUNCH_ANGLE = 90; // Fixed direction in degrees (90° = straight right)
     const TRAIL_LENGTH = 300; // Number of historic trail points stored
     const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
+    const LAUNCH_COOLDOWN_MS = 1000; // Spam-click filter (1 second rate limit)
 
     // STATE VARIABLES
     let balls = [];
+    let lastLaunchTime = 0; // Timestamp tracking for spam filter
 
-    // Central Gravity Node Definition
+    // Central Gravity Node Definition (Jack-o'-Lantern)
     const centralNode = {
       x: 0,
       y: 0,
-      radius: 12
+      radius: 22
     };
 
-    function generateSpaceBackground() {
+    function generateHalloweenBackground() {
       bgCanvas.width = canvas.width;
       bgCanvas.height = canvas.height;
 
-      // Deep space base gradient
-      const spaceGradient = bgCtx.createRadialGradient(
-        bgCanvas.width / 2, bgCanvas.height / 2, 50,
-        bgCanvas.width / 2, bgCanvas.height / 2, Math.max(bgCanvas.width, bgCanvas.height)
-      );
-      spaceGradient.addColorStop(0, '#060614');
-      spaceGradient.addColorStop(1, '#020206');
-      bgCtx.fillStyle = spaceGradient;
+      // Dark Spooky Night Sky Base Gradient
+      const skyGradient = bgCtx.createLinearGradient(0, 0, 0, bgCanvas.height);
+      skyGradient.addColorStop(0, '#0c0418');
+      skyGradient.addColorStop(0.5, '#16082b');
+      skyGradient.addColorStop(1, '#05010a');
+      bgCtx.fillStyle = skyGradient;
       bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
 
-      // 1. Draw Nebulae Clouds (Glowing Radial Gradients)
-      const nebulaConfigs = [
-        { xRatio: 0.25, yRatio: 0.3, radiusRatio: 0.35, color: 'rgba(128, 0, 128, 0.18)' },  // Purple
-        { xRatio: 0.75, yRatio: 0.25, radiusRatio: 0.3, color: 'rgba(0, 150, 255, 0.15)' },  // Cyan
-        { xRatio: 0.3, yRatio: 0.75, radiusRatio: 0.4, color: 'rgba(255, 0, 128, 0.12)' },  // Magenta
-        { xRatio: 0.8, yRatio: 0.7, radiusRatio: 0.35, color: 'rgba(0, 200, 150, 0.12)' }   // Teal
+      // 1. Spooky Fog / Glowing Nebulae
+      const fogConfigs = [
+        { xRatio: 0.2, yRatio: 0.4, radiusRatio: 0.4, color: 'rgba(128, 0, 128, 0.2)' },
+        { xRatio: 0.8, yRatio: 0.3, radiusRatio: 0.35, color: 'rgba(255, 100, 0, 0.15)' },
+        { xRatio: 0.5, yRatio: 0.7, radiusRatio: 0.45, color: 'rgba(80, 0, 120, 0.25)' }
       ];
 
-      nebulaConfigs.forEach(neb => {
-        const x = bgCanvas.width * neb.xRatio;
-        const y = bgCanvas.height * neb.yRatio;
-        const radius = Math.min(bgCanvas.width, bgCanvas.height) * neb.radiusRatio;
+      fogConfigs.forEach(fog => {
+        const x = bgCanvas.width * fog.xRatio;
+        const y = bgCanvas.height * fog.yRatio;
+        const radius = Math.min(bgCanvas.width, bgCanvas.height) * fog.radiusRatio;
 
         const grad = bgCtx.createRadialGradient(x, y, 0, x, y, radius);
-        grad.addColorStop(0, neb.color);
-        grad.addColorStop(0.5, neb.color.replace(/[\d\.]+\)$/, '0.05)'));
+        grad.addColorStop(0, fog.color);
         grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
         bgCtx.fillStyle = grad;
@@ -175,85 +174,346 @@
         bgCtx.fill();
       });
 
-      // 2. Draw Galaxies
-      drawGalaxy(bgCtx, bgCanvas.width * 0.18, bgCanvas.height * 0.25, 65, -0.4, '#a8b5ff', '#ff88cc');
-      drawGalaxy(bgCtx, bgCanvas.width * 0.82, bgCanvas.height * 0.75, 80, 0.5, '#ffccaa', '#66ccff');
+      // 2. Large Harvest Moon
+      const moonX = bgCanvas.width * 0.78;
+      const moonY = bgCanvas.height * 0.22;
+      const moonRadius = Math.min(bgCanvas.width, bgCanvas.height) * 0.12;
 
-      // 3. Draw Star Field
-      const numStars = Math.floor((bgCanvas.width * bgCanvas.height) / 2800);
+      const moonGlow = bgCtx.createRadialGradient(moonX, moonY, moonRadius * 0.5, moonX, moonY, moonRadius * 2.5);
+      moonGlow.addColorStop(0, '#fff5cc');
+      moonGlow.addColorStop(0.4, 'rgba(255, 160, 0, 0.4)');
+      moonGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      bgCtx.fillStyle = moonGlow;
+      bgCtx.beginPath();
+      bgCtx.arc(moonX, moonY, moonRadius * 2.5, 0, Math.PI * 2);
+      bgCtx.fill();
+
+      bgCtx.fillStyle = '#ffea9f';
+      bgCtx.beginPath();
+      bgCtx.arc(moonX, moonY, moonRadius, 0, Math.PI * 2);
+      bgCtx.fill();
+
+      // Moon Craters
+      bgCtx.fillStyle = 'rgba(210, 130, 0, 0.25)';
+      bgCtx.beginPath();
+      bgCtx.arc(moonX - moonRadius * 0.3, moonY - moonRadius * 0.2, moonRadius * 0.2, 0, Math.PI * 2);
+      bgCtx.arc(moonX + moonRadius * 0.4, moonY + moonRadius * 0.1, moonRadius * 0.25, 0, Math.PI * 2);
+      bgCtx.arc(moonX - moonRadius * 0.1, moonY + moonRadius * 0.4, moonRadius * 0.15, 0, Math.PI * 2);
+      bgCtx.fill();
+
+      // 3. Flying Witch across the Moon
+      drawWitch(bgCtx, moonX - moonRadius * 0.2, moonY - moonRadius * 0.1, 0.85);
+
+      // 4. Distant Stars / Spooky Sparkles
+      const numStars = Math.floor((bgCanvas.width * bgCanvas.height) / 4000);
       for (let i = 0; i < numStars; i++) {
         const sx = Math.random() * bgCanvas.width;
         const sy = Math.random() * bgCanvas.height;
-        const size = Math.random() * 1.6 + 0.3;
-
-        // Color variation (White, Blue, Warm Yellow)
-        const randColor = Math.random();
-        const starColor = randColor < 0.6 ? '#ffffff' : (randColor < 0.8 ? '#b9d5ff' : '#ffe1b9');
-        const alpha = Math.random() * 0.7 + 0.3;
-
-        bgCtx.fillStyle = starColor;
-        bgCtx.globalAlpha = alpha;
+        const size = Math.random() * 1.4 + 0.4;
+        bgCtx.fillStyle = Math.random() < 0.5 ? '#ffddaa' : '#ccaaff';
+        bgCtx.globalAlpha = Math.random() * 0.6 + 0.3;
         bgCtx.beginPath();
         bgCtx.arc(sx, sy, size, 0, Math.PI * 2);
         bgCtx.fill();
-
-        // Cross-flare for larger stars
-        if (size > 1.6 && Math.random() < 0.25) {
-          bgCtx.strokeStyle = starColor;
-          bgCtx.lineWidth = 0.5;
-          bgCtx.beginPath();
-          bgCtx.moveTo(sx - size * 2.5, sy);
-          bgCtx.lineTo(sx + size * 2.5, sy);
-          bgCtx.moveTo(sx, sy - size * 2.5);
-          bgCtx.lineTo(sx, sy + size * 2.5);
-          bgCtx.stroke();
-        }
       }
       bgCtx.globalAlpha = 1.0;
+
+      // 5. Spooky Hill Landscapes
+      drawSpookyHills(bgCtx, bgCanvas.width, bgCanvas.height);
+
+      // 6. Haunted House on Hill
+      drawHauntedHouse(bgCtx, bgCanvas.width * 0.18, bgCanvas.height - 40, 0.7);
+
+      // 7. Bats Flying in Sky
+      drawBat(bgCtx, bgCanvas.width * 0.35, bgCanvas.height * 0.25, 0.8, -0.2);
+      drawBat(bgCtx, bgCanvas.width * 0.42, bgCanvas.height * 0.18, 0.5, 0.1);
+      drawBat(bgCtx, bgCanvas.width * 0.62, bgCanvas.height * 0.38, 0.7, -0.3);
+      drawBat(bgCtx, bgCanvas.width * 0.88, bgCanvas.height * 0.45, 0.6, 0.2);
+
+      // 8. Floating Ghosts
+      drawGhost(bgCtx, bgCanvas.width * 0.08, bgCanvas.height * 0.55, 1.0, 0.35);
+      drawGhost(bgCtx, bgCanvas.width * 0.82, bgCanvas.height * 0.68, 0.8, 0.3);
     }
 
-    function drawGalaxy(ctx, x, y, radius, angle, coreColor, armColor) {
+    function drawSpookyHills(ctx, width, height) {
+      // Background Hill
+      ctx.fillStyle = '#0a0314';
+      ctx.beginPath();
+      ctx.moveTo(0, height);
+      ctx.lineTo(0, height - 90);
+      ctx.quadraticCurveTo(width * 0.25, height - 160, width * 0.55, height - 80);
+      ctx.quadraticCurveTo(width * 0.8, height - 20, width, height - 90);
+      ctx.lineTo(width, height);
+      ctx.closePath();
+      ctx.fill();
+
+      // Foreground Hill
+      ctx.fillStyle = '#05010a';
+      ctx.beginPath();
+      ctx.moveTo(0, height);
+      ctx.lineTo(0, height - 50);
+      ctx.quadraticCurveTo(width * 0.3, height - 20, width * 0.6, height - 100);
+      ctx.quadraticCurveTo(width * 0.85, height - 140, width, height - 40);
+      ctx.lineTo(width, height);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function drawWitch(ctx, x, y, scale) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(scale, scale);
+      ctx.fillStyle = '#0a0212';
+
+      // Broomstick
+      ctx.strokeStyle = '#0a0212';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-28, 8);
+      ctx.lineTo(28, -6);
+      ctx.stroke();
+
+      // Broom bristles
+      ctx.beginPath();
+      ctx.moveTo(-28, 8);
+      ctx.lineTo(-40, 3);
+      ctx.lineTo(-38, 15);
+      ctx.closePath();
+      ctx.fill();
+
+      // Witch Body
+      ctx.beginPath();
+      ctx.moveTo(6, -6);
+      ctx.lineTo(-12, 10);
+      ctx.lineTo(12, 10);
+      ctx.closePath();
+      ctx.fill();
+
+      // Head
+      ctx.beginPath();
+      ctx.arc(2, -12, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Witch Hat
+      ctx.beginPath();
+      ctx.moveTo(-8, -14);
+      ctx.lineTo(12, -14);
+      ctx.lineTo(2, -30);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function drawBat(ctx, x, y, scale, angle = 0) {
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(angle);
-      ctx.scale(1, 0.45); // Flatten for tilted 3D perspective
+      ctx.scale(scale, scale);
+      ctx.fillStyle = '#0d041a';
 
-      // Bright Galactic Core
-      const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 0.35);
-      coreGrad.addColorStop(0, '#ffffff');
-      coreGrad.addColorStop(0.3, coreColor);
-      coreGrad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = coreGrad;
       ctx.beginPath();
-      ctx.arc(0, 0, radius * 0.35, 0, Math.PI * 2);
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(-10, -12, -22, -6);
+      ctx.quadraticCurveTo(-14, 2, -7, 2);
+      ctx.quadraticCurveTo(-4, 8, 0, 3);
+      ctx.quadraticCurveTo(4, 8, 7, 2);
+      ctx.quadraticCurveTo(14, 2, 22, -6);
+      ctx.quadraticCurveTo(10, -12, 0, 0);
       ctx.fill();
 
-      // Spiral Arm Particles
-      const numParticles = 110;
-      for (let i = 0; i < numParticles; i++) {
-        const theta = (i / numParticles) * Math.PI * 5;
-        const r = (i / numParticles) * radius;
+      ctx.restore();
+    }
 
-        ctx.fillStyle = armColor;
-        ctx.globalAlpha = Math.max(0, (1 - r / radius) * 0.5);
+    function drawGhost(ctx, x, y, scale, alpha = 0.3) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(scale, scale);
+      ctx.fillStyle = `rgba(240, 230, 255, ${alpha})`;
 
-        // Arm 1
-        const x1 = r * Math.cos(theta);
-        const y1 = r * Math.sin(theta);
-        ctx.beginPath();
-        ctx.arc(x1, y1, Math.random() * 1.4 + 0.4, 0, Math.PI * 2);
-        ctx.fill();
+      ctx.beginPath();
+      ctx.arc(0, -10, 14, Math.PI, 0, false);
+      ctx.quadraticCurveTo(14, 10, 14, 18);
+      ctx.quadraticCurveTo(7, 12, 0, 18);
+      ctx.quadraticCurveTo(-7, 12, -14, 18);
+      ctx.quadraticCurveTo(-14, 10, -14, 0);
+      ctx.fill();
 
-        // Arm 2 (Opposite)
-        const x2 = r * Math.cos(theta + Math.PI);
-        const y2 = r * Math.sin(theta + Math.PI);
-        ctx.beginPath();
-        ctx.arc(x2, y2, Math.random() * 1.4 + 0.4, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      // Ghost eyes & mouth
+      ctx.fillStyle = `rgba(10, 0, 20, ${alpha + 0.4})`;
+      ctx.beginPath();
+      ctx.arc(-5, -10, 2.5, 0, Math.PI * 2);
+      ctx.arc(5, -10, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.ellipse(0, -3, 2.5, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
 
       ctx.restore();
-      ctx.globalAlpha = 1.0;
+    }
+
+    function drawHauntedHouse(ctx, x, y, scale) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(scale, scale);
+      ctx.fillStyle = '#06020c';
+
+      // Base Structure
+      ctx.fillRect(-45, -60, 90, 60);
+
+      // Pointy Roof
+      ctx.beginPath();
+      ctx.moveTo(-55, -60);
+      ctx.lineTo(0, -110);
+      ctx.lineTo(55, -60);
+      ctx.closePath();
+      ctx.fill();
+
+      // Side Tower
+      ctx.fillRect(15, -120, 32, 60);
+      ctx.beginPath();
+      ctx.moveTo(10, -120);
+      ctx.lineTo(31, -165);
+      ctx.lineTo(52, -120);
+      ctx.closePath();
+      ctx.fill();
+
+      // Crooked Chimney
+      ctx.fillRect(-35, -95, 12, 30);
+
+      // Glowing Windows
+      ctx.fillStyle = '#ffaa00';
+      ctx.shadowColor = '#ff6600';
+      ctx.shadowBlur = 10;
+
+      // Door & Windows
+      ctx.fillRect(-12, -28, 24, 28);
+      ctx.beginPath();
+      ctx.arc(0, -80, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillRect(23, -105, 16, 22);
+
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+
+    function drawJackOLantern(ctx, x, y, radius) {
+      ctx.save();
+      ctx.translate(x, y);
+
+      // Outer Pumpkin Glow
+      ctx.shadowColor = '#ff6600';
+      ctx.shadowBlur = 25;
+
+      // Orange Pumpkin Body
+      ctx.fillStyle = '#ff6f00';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, radius * 1.25, radius, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0; // Disable shadow for internal cuts
+
+      // Pumpkin Texture Lines
+      ctx.strokeStyle = '#d85000';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, radius * 0.85, radius * 0.98, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(0, 0, radius * 0.42, radius * 0.95, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Green Stem
+      ctx.fillStyle = '#3a7d44';
+      ctx.beginPath();
+      ctx.moveTo(-radius * 0.15, -radius * 0.85);
+      ctx.quadraticCurveTo(-radius * 0.1, -radius * 1.4, radius * 0.2, -radius * 1.25);
+      ctx.quadraticCurveTo(radius * 0.05, -radius * 0.85, radius * 0.15, -radius * 0.85);
+      ctx.fill();
+
+      // Glowing Yellow Carved Features
+      ctx.fillStyle = '#ffff33';
+      ctx.shadowColor = '#ffff00';
+      ctx.shadowBlur = 8;
+
+      // Left Eye
+      ctx.beginPath();
+      ctx.moveTo(-radius * 0.55, -radius * 0.25);
+      ctx.lineTo(-radius * 0.2, -radius * 0.25);
+      ctx.lineTo(-radius * 0.38, -radius * 0.6);
+      ctx.closePath();
+      ctx.fill();
+
+      // Right Eye
+      ctx.beginPath();
+      ctx.moveTo(radius * 0.2, -radius * 0.25);
+      ctx.lineTo(radius * 0.55, -radius * 0.25);
+      ctx.lineTo(radius * 0.38, -radius * 0.6);
+      ctx.closePath();
+      ctx.fill();
+
+      // Nose
+      ctx.beginPath();
+      ctx.moveTo(0, -radius * 0.18);
+      ctx.lineTo(-radius * 0.12, 0.06);
+      ctx.lineTo(radius * 0.12, 0.06);
+      ctx.closePath();
+      ctx.fill();
+
+      // Jagged Smile
+      ctx.beginPath();
+      ctx.moveTo(-radius * 0.65, radius * 0.15);
+      ctx.quadraticCurveTo(0, radius * 0.7, radius * 0.65, radius * 0.15);
+      ctx.quadraticCurveTo(radius * 0.35, radius * 0.5, 0, radius * 0.32);
+      ctx.quadraticCurveTo(-radius * 0.35, radius * 0.5, -radius * 0.65, radius * 0.15);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function drawCandyCorn(ctx, x, y, angle, size = 13) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+
+      // Candy Corn Soft Glow
+      ctx.shadowColor = '#ffaa00';
+      ctx.shadowBlur = 8;
+
+      const h = size * 1.5;
+      const w = size * 1.1;
+
+      // 1. Bottom Base (Yellow)
+      ctx.fillStyle = '#ffcc00';
+      ctx.beginPath();
+      ctx.moveTo(-w / 2, h / 2);
+      ctx.quadraticCurveTo(0, h / 2 + 3, w / 2, h / 2);
+      ctx.lineTo(w * 0.38, h * 0.1);
+      ctx.lineTo(-w * 0.38, h * 0.1);
+      ctx.closePath();
+      ctx.fill();
+
+      // 2. Middle Band (Orange)
+      ctx.fillStyle = '#ff6600';
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.38, h * 0.1);
+      ctx.lineTo(w * 0.38, h * 0.1);
+      ctx.lineTo(w * 0.2, -h * 0.25);
+      ctx.lineTo(-w * 0.2, -h * 0.25);
+      ctx.closePath();
+      ctx.fill();
+
+      // 3. Top Tip (White)
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.2, -h * 0.25);
+      ctx.lineTo(w * 0.2, -h * 0.25);
+      ctx.quadraticCurveTo(0, -h / 2 - 2, 0, -h / 2 - 2);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
     }
 
     function resizeCanvas() {
@@ -266,18 +526,28 @@
       centralNode.y = canvas.height / 2;
 
       // Re-generate background buffer for current viewport
-      generateSpaceBackground();
+      generateHalloweenBackground();
     }
 
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
+
+    // Trigger launch with Spam-Click Filter (1x per second)
+    function handleUserLaunch(clickX, clickY) {
+      const currentTime = Date.now();
+      if (currentTime - lastLaunchTime < LAUNCH_COOLDOWN_MS) {
+        return; // Filter out rapid spam clicks
+      }
+      lastLaunchTime = currentTime;
+      launchBall(clickX, clickY);
+    }
 
     // Mouse Click Handler
     canvas.addEventListener('click', (e) => {
       const rect = canvas.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
       const clickY = e.clientY - rect.top;
-      launchBall(clickX, clickY);
+      handleUserLaunch(clickX, clickY);
     });
 
     // Touchscreen Tap Handler for Chromebooks
@@ -287,7 +557,7 @@
       const touch = e.touches[0];
       const touchX = touch.clientX - rect.left;
       const touchY = touch.clientY - rect.top;
-      launchBall(touchX, touchY);
+      handleUserLaunch(touchX, touchY);
     });
 
     function launchBall(x, y) {
@@ -296,13 +566,13 @@
       const vx = LAUNCH_VELOCITY * Math.sin(rad);
       const vy = -LAUNCH_VELOCITY * Math.cos(rad);
 
-      // Overwrite existing array to strictly maintain a single ball on screen
+      // Overwrite existing array to strictly maintain a single candy corn on screen
       balls = [{
         x: x,
         y: y,
         vx: vx,
         vy: vy,
-        radius: 4,
+        radius: 10,
         trail: [] // Stores history of past {x, y} coordinates
       }];
     }
@@ -321,7 +591,7 @@
         const distSq = dx * dx + dy * dy;
         const dist = Math.sqrt(distSq);
 
-        // Absorption check: ball collides with central mass
+        // Absorption check: candy corn collides with central Jack-o'-Lantern
         if (dist < centralNode.radius + b.radius) {
           balls.splice(i, 1);
           continue;
@@ -366,27 +636,15 @@
     }
 
     function draw() {
-      // 1. Render Offscreen Cosmic Background
+      // 1. Render Offscreen Spooky Halloween Background Buffer
       ctx.drawImage(bgCanvas, 0, 0);
 
-      // 2. Draw Central Mass Node
-      ctx.beginPath();
-      ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffffff';
-      ctx.shadowColor = '#00f0ff';
-      ctx.shadowBlur = 12;
-      ctx.fill();
-      ctx.shadowBlur = 0; // Reset shadow
+      // 2. Draw Central Jack-o'-Lantern
+      drawJackOLantern(ctx, centralNode.x, centralNode.y, centralNode.radius);
 
-      // Center mark on node
-      ctx.beginPath();
-      ctx.arc(centralNode.x, centralNode.y, 2, 0, Math.PI * 2);
-      ctx.fillStyle = '#000000';
-      ctx.fill();
-
-      // 3. Draw Ball & Rainbow Trail
+      // 3. Draw Candy Corn & Glowing Trail
       for (const b of balls) {
-        // Draw rainbow path line segment by segment
+        // Draw path line segment by segment
         if (b.trail.length > 1) {
           ctx.lineWidth = 2.5;
           for (let t = 1; t < b.trail.length; t++) {
@@ -394,24 +652,18 @@
             ctx.moveTo(b.trail[t - 1].x, b.trail[t - 1].y);
             ctx.lineTo(b.trail[t].x, b.trail[t].y);
 
-            // Calculate hue (0° to 360°) along the trail length
-            const hue = (t / TRAIL_LENGTH) * 360;
-            // Opacity fades smoothly from tail (0%) to current position (100%)
+            // Halloween Trail Palette (Purple to Orange to Yellow)
+            const hue = 30 + (t / TRAIL_LENGTH) * 270;
             const alpha = t / b.trail.length;
 
-            ctx.strokeStyle = `hsla(${hue}, 100%, 65%, ${alpha})`;
+            ctx.strokeStyle = `hsla(${hue}, 100%, 60%, ${alpha})`;
             ctx.stroke();
           }
         }
 
-        // Draw ball object with glow
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffffff';
-        ctx.shadowColor = '#ffffff';
-        ctx.shadowBlur = 8;
-        ctx.fill();
-        ctx.shadowBlur = 0; // Reset shadow
+        // Draw Candy Corn pointing in movement direction
+        const moveAngle = Math.atan2(b.vy, b.vx) + Math.PI / 2;
+        drawCandyCorn(ctx, b.x, b.y, moveAngle, b.radius);
       }
     }
 

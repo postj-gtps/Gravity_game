@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gravity Physics - Portals, Asteroids & Triangles</title>
+    <title>Gravity Physics - Space Trains & Alien Trails</title>
     <style>
         * {
             box-sizing: border-box;
@@ -139,10 +139,10 @@
 
     <!-- Header Section -->
     <div id="header">
-        <h1>Gravity & Portals</h1>
+        <h1>Gravity & Space Trains 🚂</h1>
         
         <div class="controls-group">
-            <button id="mode-ball-btn" class="btn active" onclick="setMode('ball')">⚽ Launch Ball</button>
+            <button id="mode-ball-btn" class="btn active" onclick="setMode('ball')">🚂 Launch Space Train</button>
             <button id="mode-portal-btn" class="btn btn-portal-blue" onclick="setMode('portal')">🌀 Place Portals</button>
             <button class="btn" onclick="clearPortals()">Clear Portals</button>
             <button class="btn" onclick="resetSimulation()">Reset All</button>
@@ -154,10 +154,10 @@
         <canvas id="simCanvas"></canvas>
     </div>
 
-    <!-- Instructions, Ball Counter & Cooldown Indicator -->
+    <!-- Instructions, Space Train Counter & Cooldown Indicator -->
     <div class="instructions-bar">
-        <span id="instruction-text">Mode: Launch Ball — Click/Tap canvas to spawn a ball.</span>
-        <div>Balls: <span id="ball-count">0</span>/30 | Spam Filter: <span id="spam-status" class="status-ready">READY</span></div>
+        <span id="instruction-text">Mode: Launch Space Train — Click/Tap canvas to spawn a train.</span>
+        <div>Trains: <span id="ball-count">0</span>/30 | Spam Filter: <span id="spam-status" class="status-ready">READY</span></div>
     </div>
 
     <script>
@@ -168,19 +168,19 @@
         const GRAVITY_CONSTANT = 1800;    // Strength of gravitational pull (G)
         const LAUNCH_VELOCITY = 5;         // Fixed velocity on click
         const FIXED_LAUNCH_ANGLE = 90;     // Fixed direction in degrees (90° = straight right)
-        const TRAIL_LENGTH = 300;         // Number of historic trail points stored
+        const TRAIL_LENGTH = 120;          // Historic trail points stored for alien emojis
         const SOFTENING_FACTOR = 400;     // Prevents infinite velocity near center
         const SPAM_COOLDOWN_MS = 1000;    // 1-second delay between launches
-        const WALL_BOUNCE_RESTITUTION = 0.85; // Bounciness off outer walls
-        const MAX_BALLS = 30;              // Maximum onscreen ball cap
+        const MAX_BALLS = 30;              // Maximum onscreen train cap
 
         // STATE VARIABLES
-        let currentMode = 'ball';          // 'ball' or 'portal'
+        let currentMode = 'ball';          // 'ball' (space train) or 'portal'
         let lastLaunchTime = 0;           // Timestamp for spam-click filter
-        let balls = [];
+        let balls = [];                    // Space train array
         let portals = [];                 // Array holding up to 2 portal objects
-        let asteroids = [];               // Floating asteroids that clone balls
-        let triangles = [];               // Floating triangles that reflect balls
+        let asteroids = [];               // Floating asteroids that clone trains
+        let triangles = [];               // Floating triangles that reflect trains
+        let explosions = [];              // Explosion animation particles
         let portalPulseAngle = 0;         // For portal visual animation
 
         // Central Gravity Node Definition
@@ -206,6 +206,7 @@
         function initSpaceObjects() {
             asteroids = [];
             triangles = [];
+            explosions = [];
 
             // Spawn floating Asteroids
             for (let i = 0; i < 3; i++) {
@@ -255,7 +256,7 @@
             if (mode === 'ball') {
                 ballBtn.classList.add('active');
                 portalBtn.classList.remove('active');
-                instrText.textContent = "Mode: Launch Ball — Click/Tap canvas to spawn a ball (1s cooldown).";
+                instrText.textContent = "Mode: Launch Space Train — Click/Tap canvas to spawn a train (1s cooldown).";
             } else {
                 portalBtn.classList.add('active');
                 ballBtn.classList.remove('active');
@@ -286,7 +287,7 @@
                 return;
             }
 
-            // Enforce maximum 30 balls limit
+            // Enforce maximum 30 space trains limit
             if (balls.length >= MAX_BALLS) {
                 return;
             }
@@ -299,15 +300,13 @@
             const vx = LAUNCH_VELOCITY * Math.sin(rad);  
             const vy = -LAUNCH_VELOCITY * Math.cos(rad); 
 
-            // Spawn new ball into state array
+            // Spawn new space train into state array
             balls.push({
                 x: x,
                 y: y,
                 vx: vx,
                 vy: vy,
-                radius: 6,
-                scaleX: 1.0,               // Horizontal deformation scale factor
-                scaleY: 1.0,               // Vertical deformation scale factor
+                radius: 12,
                 teleportCooldown: 0,      // Cooldown timer to prevent infinite teleport loop
                 trail: []
             });
@@ -320,7 +319,6 @@
             ];
 
             if (portals.length < 2) {
-                // Add Portal 1 or 2
                 const colorScheme = portalColors[portals.length];
                 portals.push({
                     x: x,
@@ -329,7 +327,6 @@
                     ...colorScheme
                 });
             } else {
-                // Replace oldest portal (cycle between 0 and 1)
                 portals.shift();
                 portals[0].border = portalColors[0].border;
                 portals[0].core = portalColors[0].core;
@@ -353,6 +350,7 @@
         function resetSimulation() {
             balls = [];
             portals = [];
+            explosions = [];
             initSpaceObjects();
         }
 
@@ -371,6 +369,15 @@
                 statusElem.textContent = 'READY';
                 statusElem.className = 'status-ready';
             }, SPAM_COOLDOWN_MS);
+        }
+
+        function triggerExplosion(x, y) {
+            explosions.push({
+                x: x,
+                y: y,
+                size: 24,
+                alpha: 1.0
+            });
         }
 
         function updatePhysics() {
@@ -398,10 +405,19 @@
                 if (tri.y > canvas.height + tri.radius) tri.y = -tri.radius;
             }
 
+            // Update Explosions
+            for (let eIdx = explosions.length - 1; eIdx >= 0; eIdx--) {
+                const exp = explosions[eIdx];
+                exp.alpha -= 0.03;
+                exp.size += 1.2;
+                if (exp.alpha <= 0) {
+                    explosions.splice(eIdx, 1);
+                }
+            }
+
             for (let i = balls.length - 1; i >= 0; i--) {
                 const b = balls[i];
 
-                // Decrement teleportation cooldown
                 if (b.teleportCooldown > 0) {
                     b.teleportCooldown--;
                 }
@@ -412,8 +428,9 @@
                 const distSq = dx * dx + dy * dy;
                 const dist = Math.sqrt(distSq);
 
-                // Absorption check: ball hits central mass
+                // Absorption check: train hits central mass
                 if (dist < centralNode.radius + b.radius) {
+                    triggerExplosion(b.x, b.y);
                     balls.splice(i, 1);
                     continue;
                 }
@@ -428,36 +445,15 @@
                 b.x += b.vx;
                 b.y += b.vy;
 
-                // 2. Wall Collision & Deformation Logic
-                if (b.x - b.radius <= 0) {
-                    b.x = b.radius;
-                    b.vx = -b.vx * WALL_BOUNCE_RESTITUTION;
-                    b.scaleX = 0.4;
-                    b.scaleY = 1.6;
-                } else if (b.x + b.radius >= canvas.width) {
-                    b.x = canvas.width - b.radius;
-                    b.vx = -b.vx * WALL_BOUNCE_RESTITUTION;
-                    b.scaleX = 0.4;
-                    b.scaleY = 1.6;
+                // 2. Wall Collision Explosion Logic (Space Train explodes on wall hit)
+                if (b.x - b.radius <= 0 || b.x + b.radius >= canvas.width || 
+                    b.y - b.radius <= 0 || b.y + b.radius >= canvas.height) {
+                    triggerExplosion(b.x, b.y);
+                    balls.splice(i, 1);
+                    continue;
                 }
 
-                if (b.y - b.radius <= 0) {
-                    b.y = b.radius;
-                    b.vy = -b.vy * WALL_BOUNCE_RESTITUTION;
-                    b.scaleX = 1.6;
-                    b.scaleY = 0.4;
-                } else if (b.y + b.radius >= canvas.height) {
-                    b.y = canvas.height - b.radius;
-                    b.vy = -b.vy * WALL_BOUNCE_RESTITUTION;
-                    b.scaleX = 1.6;
-                    b.scaleY = 0.4;
-                }
-
-                // Smoothly decay ball deformation back to circle (scale = 1.0)
-                b.scaleX += (1.0 - b.scaleX) * 0.18;
-                b.scaleY += (1.0 - b.scaleY) * 0.18;
-
-                // 3. Asteroid Collision & Ball Spawning Logic
+                // 3. Asteroid Collision & Space Train Spawning Logic
                 for (const ast of asteroids) {
                     const adx = b.x - ast.x;
                     const ady = b.y - ast.y;
@@ -468,18 +464,16 @@
                         const nx = adx / adist;
                         const ny = ady / adist;
 
-                        // Separate ball from asteroid
                         b.x = ast.x + nx * (minDist + 1);
                         b.y = ast.y + ny * (minDist + 1);
 
-                        // Reflect velocity vector off asteroid surface
                         const dot = b.vx * nx + b.vy * ny;
                         if (dot < 0) {
                             b.vx -= 2 * dot * nx;
                             b.vy -= 2 * dot * ny;
                         }
 
-                        // Spawn additional ball if under the 30-ball maximum onscreen cap
+                        // Clone space train if under limit
                         if (balls.length < MAX_BALLS) {
                             const angleOffset = Math.PI / 4;
                             const cos = Math.cos(angleOffset);
@@ -493,8 +487,6 @@
                                 vx: spawnVx,
                                 vy: spawnVy,
                                 radius: b.radius,
-                                scaleX: 1.0,
-                                scaleY: 1.0,
                                 teleportCooldown: 10,
                                 trail: []
                             });
@@ -503,7 +495,7 @@
                     }
                 }
 
-                // 4. Triangle Collision Logic (Bounce only, NO ball spawn)
+                // 4. Triangle Collision Logic (Bounce only)
                 for (const tri of triangles) {
                     const tdx = b.x - tri.x;
                     const tdy = b.y - tri.y;
@@ -514,11 +506,9 @@
                         const nx = tdx / tdist;
                         const ny = tdy / tdist;
 
-                        // Separate ball from triangle surface
                         b.x = tri.x + nx * (minDist + 1);
                         b.y = tri.y + ny * (minDist + 1);
 
-                        // Reflect velocity vector
                         const dot = b.vx * nx + b.vy * ny;
                         if (dot < 0) {
                             b.vx -= 2 * dot * nx;
@@ -550,14 +540,14 @@
                     }
                 }
 
-                // Record position history for trail
+                // Record position history for Alien trail
                 b.trail.push({ x: b.x, y: b.y });
                 if (b.trail.length > TRAIL_LENGTH) {
                     b.trail.shift();
                 }
             }
 
-            // Update UI ball counter
+            // Update UI train counter
             const ballCountElem = document.getElementById('ball-count');
             if (ballCountElem) ballCountElem.textContent = balls.length;
 
@@ -655,28 +645,43 @@
                 ctx.fillText(p.label, p.x, p.y);
             }
 
-            // 5. Draw Balls & Trails
+            // 5. Draw Space Trains & Alien Trails
             for (const b of balls) {
-                if (b.trail.length > 1) {
-                    ctx.beginPath();
-                    ctx.moveTo(b.trail[0].x, b.trail[0].y);
-                    for (let t = 1; t < b.trail.length; t++) {
-                        ctx.lineTo(b.trail[t].x, b.trail[t].y);
-                    }
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-                    ctx.lineWidth = 1.2;
-                    ctx.stroke();
+                // Render Alien Emoji Trail (spaced out evenly along the path)
+                for (let t = 0; t < b.trail.length; t += 10) {
+                    const pt = b.trail[t];
+                    const alpha = (t + 1) / b.trail.length;
+                    ctx.save();
+                    ctx.globalAlpha = alpha * 0.85;
+                    ctx.font = '16px serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('👽', pt.x, pt.y);
+                    ctx.restore();
                 }
 
+                // Render Space Train Emoji rotated in travel direction
                 ctx.save();
                 ctx.translate(b.x, b.y);
-                ctx.scale(b.scaleX, b.scaleY);
+                const angle = Math.atan2(b.vy, b.vx);
+                ctx.rotate(angle);
 
-                ctx.beginPath();
-                ctx.arc(0, 0, b.radius, 0, Math.PI * 2);
-                ctx.fillStyle = '#ffffff';
-                ctx.fill();
+                ctx.font = '26px serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('🚂', 0, 0);
 
+                ctx.restore();
+            }
+
+            // 6. Draw Explosion Visual Effects
+            for (const exp of explosions) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, exp.alpha);
+                ctx.font = `${exp.size}px serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('💥', exp.x, exp.y);
                 ctx.restore();
             }
         }

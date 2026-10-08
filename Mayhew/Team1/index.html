@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gravity Physics - Rocket Edition</title>
+    <title>Gravity Physics - Solar System Edition</title>
     <style>
         * {
             box-sizing: border-box;
@@ -125,7 +125,7 @@
 
     <!-- Header Section -->
     <div id="header">
-        <h1>Gravity Simulation 🚀</h1>
+        <h1>Solar System Gravity 🚀</h1>
         
         <div class="controls">
             <div class="slider-group">
@@ -150,48 +150,140 @@
         const ctx = canvas.getContext('2d');
 
         // SIMULATION CONSTANTS
-        const GRAVITY_CONSTANT = 1800;    // Strength of gravitational pull (G)
+        const SUN_GRAVITY = 2200;          // Gravitational pull of Sun
         const LAUNCH_VELOCITY = 5;         // Fixed launch speed
-        const TRAIL_LENGTH = 40;           // Number of historic trail points stored
-        const SOFTENING_FACTOR = 400;     // Prevents infinite velocity near center
-        const COOLDOWN_TIME_MS = 1000;     // Baseline requirement: 1x per second spam limit
+        const TRAIL_LENGTH = 35;           // Number of historic trail points stored
+        const SOFTENING_FACTOR = 300;      // Prevents infinite velocity near gravity centers
+        const COOLDOWN_TIME_MS = 1000;     // Spam limit: 1 launch per second
 
         // STATE VARIABLES
         let rockets = [];
         let particles = [];
         let lastLaunchTime = 0;
 
-        // Central Gravity Node Definition
-        const centralNode = {
+        // Central Sun Node Definition
+        const centralSun = {
             x: 0,
             y: 0,
-            radius: 14
+            radius: 18
         };
+
+        // Solar System Planets Data
+        // Mass/Gravity strengths scaled relative to actual planetary sizes/masses
+        const planetConfigs = [
+            { name: 'Mercury', orbitRatio: 0.11, radius: 4,  mass: 120,  color: '#a6a6a6', speed: 0.024 },
+            { name: 'Venus',   orbitRatio: 0.17, radius: 7,  mass: 380,  color: '#e3bb76', speed: 0.018 },
+            { name: 'Earth',   orbitRatio: 0.24, radius: 8,  mass: 420,  color: '#4b9cd3', speed: 0.014 },
+            { name: 'Mars',    orbitRatio: 0.31, radius: 6,  mass: 220,  color: '#d14e32', speed: 0.011 },
+            { name: 'Jupiter', orbitRatio: 0.43, radius: 15, mass: 1400, color: '#d8a071', speed: 0.007 },
+            { name: 'Saturn',  orbitRatio: 0.56, radius: 12, mass: 950,  color: '#ead6b0', speed: 0.005, hasRings: true },
+            { name: 'Uranus',  orbitRatio: 0.69, radius: 10, mass: 650,  color: '#72cbf0', speed: 0.0035 },
+            { name: 'Neptune', orbitRatio: 0.82, radius: 10, mass: 680,  color: '#4169e1', speed: 0.0025 }
+        ];
+
+        let planets = [];
+
+        // Background Constellations Definition (Normalized coordinates [x: 0-1, y: 0-1])
+        const constellations = [
+            {
+                name: "Big Dipper",
+                stars: [
+                    { x: 0.12, y: 0.18 }, { x: 0.16, y: 0.16 }, { x: 0.20, y: 0.17 },
+                    { x: 0.23, y: 0.21 }, { x: 0.22, y: 0.28 }, { x: 0.29, y: 0.27 }, { x: 0.28, y: 0.20 }
+                ],
+                lines: [[0,1], [1,2], [2,3], [3,4], [4,5], [5,6], [6,3]]
+            },
+            {
+                name: "Cassiopeia",
+                stars: [
+                    { x: 0.75, y: 0.12 }, { x: 0.79, y: 0.15 }, { x: 0.83, y: 0.11 },
+                    { x: 0.87, y: 0.16 }, { x: 0.91, y: 0.13 }
+                ],
+                lines: [[0,1], [1,2], [2,3], [3,4]]
+            },
+            {
+                name: "Orion",
+                stars: [
+                    { x: 0.10, y: 0.70 }, { x: 0.18, y: 0.68 }, // Shoulders (Betelgeuse, Bellatrix)
+                    { x: 0.13, y: 0.76 }, { x: 0.145, y: 0.76 }, { x: 0.16, y: 0.76 }, // Belt
+                    { x: 0.11, y: 0.85 }, { x: 0.17, y: 0.84 }  // Feet (Saiph, Rigel)
+                ],
+                lines: [[0,1], [0,2], [1,4], [2,3], [3,4], [2,5], [4,6], [5,6]]
+            },
+            {
+                name: "Cygnus",
+                stars: [
+                    { x: 0.80, y: 0.70 }, { x: 0.80, y: 0.78 }, { x: 0.80, y: 0.86 }, // Tail to Head
+                    { x: 0.74, y: 0.75 }, { x: 0.86, y: 0.75 }  // Wings
+                ],
+                lines: [[0,1], [1,2], [3,1], [1,4]]
+            },
+            {
+                name: "Southern Cross",
+                stars: [
+                    { x: 0.50, y: 0.82 }, { x: 0.50, y: 0.92 },
+                    { x: 0.47, y: 0.87 }, { x: 0.53, y: 0.87 }
+                ],
+                lines: [[0,1], [2,3]]
+            }
+        ];
+
+        // Random background ambient stars
+        let ambientStars = [];
+
+        function initPlanetsAndStars() {
+            const minDim = Math.min(canvas.width, canvas.height);
+            const maxOrbitRadius = (minDim / 2) * 0.88;
+
+            planets = planetConfigs.map((cfg, index) => {
+                // Keep existing angle if resizing, otherwise start at spread out angles
+                const currentAngle = planets[index] ? planets[index].angle : (index * (Math.PI * 2 / 8));
+                return {
+                    ...cfg,
+                    orbitRadius: maxOrbitRadius * cfg.orbitRatio,
+                    angle: currentAngle,
+                    x: centralSun.x + Math.cos(currentAngle) * (maxOrbitRadius * cfg.orbitRatio),
+                    y: centralSun.y + Math.sin(currentAngle) * (maxOrbitRadius * cfg.orbitRatio)
+                };
+            });
+
+            // Generate tiny background stars once
+            ambientStars = [];
+            for (let i = 0; i < 80; i++) {
+                ambientStars.push({
+                    x: Math.random(),
+                    y: Math.random(),
+                    size: Math.random() * 1.5 + 0.5,
+                    alpha: Math.random() * 0.6 + 0.2
+                });
+            }
+        }
 
         function resizeCanvas() {
             const wrapper = document.getElementById('canvas-wrapper');
             canvas.width = wrapper.clientWidth;
             canvas.height = wrapper.clientHeight;
             
-            // Recenter gravity node dynamically
-            centralNode.x = canvas.width / 2;
-            centralNode.y = canvas.height / 2;
+            // Recenter gravity Sun
+            centralSun.x = canvas.width / 2;
+            centralSun.y = canvas.height / 2;
+
+            initPlanetsAndStars();
         }
 
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // Generates bright random HSL colors for rockets
         function getRandomColor() {
             const hue = Math.floor(Math.random() * 360);
-            return `hsl(${hue}, 100%, 60%)`;
+            return `hsl(${hue}, 100%, 65%)`;
         }
 
-        // Pointer event handles both touchscreen taps and mouse clicks
+        // Pointer event for Chromebook touchscreen and mouse clicks
         canvas.addEventListener('pointerdown', (e) => {
             const now = Date.now();
             
-            // Spam-click filter: allow launch at most once per second (1000ms)
+            // 1-second spam-click cooldown limit
             if (now - lastLaunchTime < COOLDOWN_TIME_MS) {
                 return;
             }
@@ -218,7 +310,7 @@
                     y: y,
                     vx: vx,
                     vy: vy,
-                    radius: 8,
+                    radius: 7,
                     color: getRandomColor(),
                     trail: []
                 });
@@ -236,7 +328,7 @@
                 y: y + (Math.random() - 0.5) * 4,
                 vx: -vx * 0.2 + (Math.random() - 0.5) * 1.5,
                 vy: -vy * 0.2 + (Math.random() - 0.5) * 1.5,
-                size: Math.random() * 4 + 2,
+                size: Math.random() * 3 + 2,
                 life: 1.0,
                 decay: Math.random() * 0.04 + 0.03,
                 color: color
@@ -244,41 +336,100 @@
         }
 
         function updatePhysics() {
-            // Update Rocket Physics
+            // 1. Update Planet Orbits
+            for (const p of planets) {
+                p.angle += p.speed;
+                p.x = centralSun.x + Math.cos(p.angle) * p.orbitRadius;
+                p.y = centralSun.y + Math.sin(p.angle) * p.orbitRadius;
+            }
+
+            // 2. Update Rocket Physics
             for (let i = rockets.length - 1; i >= 0; i--) {
                 const r = rockets[i];
 
-                const margin = 500;
+                // Remove rockets that fly far off screen
+                const margin = 600;
                 if (r.x < -margin || r.x > canvas.width + margin || 
                     r.y < -margin || r.y > canvas.height + margin) {
                     rockets.splice(i, 1);
                     continue;
                 }
 
-                const dx = centralNode.x - r.x;
-                const dy = centralNode.y - r.y;
-                const distSq = dx * dx + dy * dy;
-                const dist = Math.sqrt(distSq);
+                // Cumulative acceleration from Sun + Planets
+                let axTotal = 0;
+                let ayTotal = 0;
 
-                if (dist < centralNode.radius + r.radius) {
-                    // Collision explosion effect
-                    for (let p = 0; p < 20; p++) {
-                        spawnExhaustParticle(r.x, r.y, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10, r.color);
+                // --- Pull from Central Sun ---
+                const sunDx = centralSun.x - r.x;
+                const sunDy = centralSun.y - r.y;
+                const sunDistSq = sunDx * sunDx + sunDy * sunDy;
+                const sunDist = Math.sqrt(sunDistSq);
+
+                // Sun Collision -> Explode and destroy ship
+                if (sunDist < centralSun.radius + r.radius) {
+                    for (let p = 0; p < 25; p++) {
+                        spawnExhaustParticle(r.x, r.y, (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12, r.color);
                     }
                     rockets.splice(i, 1);
                     continue;
                 }
 
-                const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
-                const ax = acceleration * (dx / dist);
-                const ay = acceleration * (dy / dist);
+                const sunAccel = SUN_GRAVITY / (sunDistSq + SOFTENING_FACTOR);
+                axTotal += sunAccel * (sunDx / sunDist);
+                ayTotal += sunAccel * (sunDy / sunDist);
 
-                r.vx += ax;
-                r.vy += ay;
+                // --- Pull & Bounce from Planets ---
+                let hitPlanet = false;
+
+                for (const p of planets) {
+                    const dx = p.x - r.x;
+                    const dy = p.y - r.y;
+                    const distSq = dx * dx + dy * dy;
+                    const dist = Math.sqrt(distSq);
+
+                    // Rocket hits planet -> BOUNCE OFF!
+                    if (dist < p.radius + r.radius) {
+                        // Normal collision vector
+                        const nx = dx / dist;
+                        const ny = dy / dist;
+
+                        // Dot product of velocity and collision normal
+                        const dot = r.vx * nx + r.vy * ny;
+
+                        // Reflect velocity vector across collision normal (elastic bounce)
+                        if (dot > 0) {
+                            r.vx = r.vx - 1.8 * dot * nx;
+                            r.vy = r.vy - 1.8 * dot * ny;
+                        }
+
+                        // Push rocket outside planet boundary to prevent sticking
+                        r.x = p.x - nx * (p.radius + r.radius + 1);
+                        r.y = p.y - ny * (p.radius + r.radius + 1);
+
+                        // Spark effect on bounce
+                        for (let sp = 0; sp < 8; sp++) {
+                            spawnExhaustParticle(r.x, r.y, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, p.color);
+                        }
+
+                        hitPlanet = true;
+                        break;
+                    }
+
+                    // Gravitational attraction from planet
+                    const planetAccel = p.mass / (distSq + SOFTENING_FACTOR);
+                    axTotal += planetAccel * (dx / dist);
+                    ayTotal += planetAccel * (dy / dist);
+                }
+
+                if (hitPlanet) continue;
+
+                // Apply total gravity forces
+                r.vx += axTotal;
+                r.vy += ayTotal;
                 r.x += r.vx;
                 r.y += r.vy;
 
-                // Record position history for trail
+                // Record position history for rocket trail
                 r.trail.push({ x: r.x, y: r.y });
                 if (r.trail.length > TRAIL_LENGTH) {
                     r.trail.shift();
@@ -288,12 +439,12 @@
                 spawnExhaustParticle(r.x, r.y, r.vx, r.vy, r.color);
             }
 
-            // Update Particles
+            // 3. Update Exhaust Particles
             for (let i = particles.length - 1; i >= 0; i--) {
                 const p = particles[i];
                 p.x += p.vx;
                 p.y += p.vy;
-                p.size *= 0.95;
+                p.size *= 0.94;
                 p.life -= p.decay;
 
                 if (p.life <= 0 || p.size < 0.5) {
@@ -303,31 +454,66 @@
         }
 
         function draw() {
-            // Dark space background with subtle motion blur
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+            // Dark space background with subtle trail fade
+            ctx.fillStyle = 'rgba(5, 2, 10, 0.3)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Central Gravity Node (Star Core)
-            const nodeGlow = ctx.createRadialGradient(
-                centralNode.x, centralNode.y, 2,
-                centralNode.x, centralNode.y, centralNode.radius * 2.5
+            // 1. Draw Background Stars & Constellations
+            drawConstellations();
+
+            // 2. Draw Orbit Paths
+            ctx.lineWidth = 1;
+            for (const p of planets) {
+                ctx.beginPath();
+                ctx.arc(centralSun.x, centralSun.y, p.orbitRadius, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
+                ctx.stroke();
+            }
+
+            // 3. Draw Central Sun
+            const sunGlow = ctx.createRadialGradient(
+                centralSun.x, centralSun.y, 2,
+                centralSun.x, centralSun.y, centralSun.radius * 2.5
             );
-            nodeGlow.addColorStop(0, '#ffffff');
-            nodeGlow.addColorStop(0.3, '#ffaa00');
-            nodeGlow.addColorStop(0.7, '#ff2200');
-            nodeGlow.addColorStop(1, 'rgba(255, 0, 0, 0)');
+            sunGlow.addColorStop(0, '#ffffff');
+            sunGlow.addColorStop(0.3, '#ffcc00');
+            sunGlow.addColorStop(0.7, '#ff3300');
+            sunGlow.addColorStop(1, 'rgba(255, 0, 0, 0)');
 
             ctx.beginPath();
-            ctx.arc(centralNode.x, centralNode.y, centralNode.radius * 2.5, 0, Math.PI * 2);
-            ctx.fillStyle = nodeGlow;
+            ctx.arc(centralSun.x, centralSun.y, centralSun.radius * 2.5, 0, Math.PI * 2);
+            ctx.fillStyle = sunGlow;
             ctx.fill();
 
             ctx.beginPath();
-            ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
+            ctx.arc(centralSun.x, centralSun.y, centralSun.radius, 0, Math.PI * 2);
             ctx.fillStyle = '#ffffff';
             ctx.fill();
 
-            // 2. Draw Color-Matched Trails
+            // 4. Draw Planets
+            for (const p of planets) {
+                // Saturn Rings
+                if (p.hasRings) {
+                    ctx.beginPath();
+                    ctx.ellipse(p.x, p.y, p.radius * 2.2, p.radius * 0.8, Math.PI / 6, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(234, 214, 176, 0.6)';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+
+                // Planet Highlight
+                ctx.beginPath();
+                ctx.arc(p.x - p.radius * 0.3, p.y - p.radius * 0.3, p.radius * 0.3, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.fill();
+            }
+
+            // 5. Draw Rocket Trails
             for (const r of rockets) {
                 const trailLen = r.trail.length;
                 for (let t = 1; t < trailLen; t++) {
@@ -338,7 +524,7 @@
                     ctx.beginPath();
                     ctx.moveTo(p1.x, p1.y);
                     ctx.lineTo(p2.x, p2.y);
-                    ctx.lineWidth = ratio * 3.5;
+                    ctx.lineWidth = ratio * 3;
                     ctx.strokeStyle = r.color;
                     ctx.globalAlpha = ratio * 0.6;
                     ctx.lineCap = 'round';
@@ -347,7 +533,7 @@
                 ctx.globalAlpha = 1.0;
             }
 
-            // 3. Draw Rocket Vectors
+            // 6. Draw Rockets
             for (const r of rockets) {
                 const angle = Math.atan2(r.vy, r.vx);
 
@@ -355,57 +541,48 @@
                 ctx.translate(r.x, r.y);
                 ctx.rotate(angle);
 
-                // Main Rocket Body
+                // Rocket Body
                 ctx.fillStyle = r.color;
-                ctx.fillRect(-10, -4, 14, 8);
+                ctx.fillRect(-8, -3, 11, 6);
 
                 // Nose Cone
                 ctx.fillStyle = '#ffffff';
                 ctx.beginPath();
-                ctx.moveTo(4, -4);
-                ctx.lineTo(12, 0);
-                ctx.lineTo(4, 4);
+                ctx.moveTo(3, -3);
+                ctx.lineTo(10, 0);
+                ctx.lineTo(3, 3);
                 ctx.closePath();
                 ctx.fill();
 
-                // Side Fins
+                // Fins
                 ctx.fillStyle = '#ff3333';
                 ctx.beginPath();
-                ctx.moveTo(-10, -4);
-                ctx.lineTo(-14, -7);
-                ctx.lineTo(-6, -4);
+                ctx.moveTo(-8, -3);
+                ctx.lineTo(-12, -6);
+                ctx.lineTo(-4, -3);
                 ctx.closePath();
                 ctx.fill();
 
                 ctx.beginPath();
-                ctx.moveTo(-10, 4);
-                ctx.lineTo(-14, 7);
-                ctx.lineTo(-6, 4);
+                ctx.moveTo(-8, 3);
+                ctx.lineTo(-12, 6);
+                ctx.lineTo(-4, 3);
                 ctx.closePath();
                 ctx.fill();
 
-                // Cockpit Window
-                ctx.fillStyle = '#111122';
-                ctx.beginPath();
-                ctx.arc(-1, 0, 2.5, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-
-                // Rocket Tail Flame
+                // Tail Flame
                 ctx.fillStyle = '#ffaa00';
                 ctx.beginPath();
-                ctx.moveTo(-10, -2);
-                ctx.lineTo(-15 - Math.random() * 5, 0);
-                ctx.lineTo(-10, 2);
+                ctx.moveTo(-8, -2);
+                ctx.lineTo(-13 - Math.random() * 4, 0);
+                ctx.lineTo(-8, 2);
                 ctx.closePath();
                 ctx.fill();
 
                 ctx.restore();
             }
 
-            // 4. Draw Exhaust Particles
+            // 7. Draw Exhaust Particles
             for (const p of particles) {
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
@@ -414,6 +591,50 @@
                 ctx.fill();
             }
             ctx.globalAlpha = 1.0;
+        }
+
+        function drawConstellations() {
+            // Ambient faint background stars
+            for (const s of ambientStars) {
+                ctx.beginPath();
+                ctx.arc(s.x * canvas.width, s.y * canvas.height, s.size, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.globalAlpha = s.alpha * 0.5;
+                ctx.fill();
+            }
+
+            // Constellation connecting lines & key stars
+            ctx.globalAlpha = 1.0;
+            for (const c of constellations) {
+                // Draw constellation lines
+                ctx.strokeStyle = 'rgba(120, 180, 255, 0.25)';
+                ctx.lineWidth = 1;
+                for (const line of c.lines) {
+                    const s1 = c.stars[line[0]];
+                    const s2 = c.stars[line[1]];
+                    ctx.beginPath();
+                    ctx.moveTo(s1.x * canvas.width, s1.y * canvas.height);
+                    ctx.lineTo(s2.x * canvas.width, s2.y * canvas.height);
+                    ctx.stroke();
+                }
+
+                // Draw constellation stars
+                for (const s of c.stars) {
+                    const sx = s.x * canvas.width;
+                    const sy = s.y * canvas.height;
+
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
+                    ctx.fillStyle = '#88ccff';
+                    ctx.fill();
+
+                    // Soft star glow
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, 5, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(136, 204, 255, 0.25)';
+                    ctx.fill();
+                }
+            }
         }
 
         function animate() {

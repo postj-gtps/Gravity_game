@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <title>Gravity Physics - Space Background Edition</title>
+ <title>Gravity Physics - Space Rockets & Space Kitties Edition</title>
  <style>
  * {
  box-sizing: border-box;
@@ -110,7 +110,7 @@
  </div>
 
  <div class="instructions">
- Click or touch anywhere on the canvas to launch Earth into orbit (up to 20 at a time).
+ Click or touch to launch a colorful rocket (max 1 launch/sec). Rockets bounce off floating space kitties!
  </div>
 
  <script>
@@ -127,10 +127,19 @@
  const FIXED_LAUNCH_ANGLE = 90; // Fixed direction in degrees (90° = straight right)
  const TRAIL_LENGTH = 300; // Number of historic trail points stored
  const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
- const MAX_BALLS = 20; // Maximum number of concurrent planets allowed
+ const MAX_BALLS = 20; // Maximum number of concurrent rockets allowed
+ const LAUNCH_COOLDOWN_MS = 1000; // Baseline requirement: 1-second spam-click filter
+
+ // COLOR PALETTE FOR ROCKET SHIPS
+ const ROCKET_PALETTE = [
+ '#ff2a6d', '#05ffa1', '#00f5d4', '#f15bb5', '#fee440', 
+ '#9b5de5', '#ff9f1c', '#7000ff', '#00bbf9', '#ff3366'
+ ];
 
  // STATE VARIABLES
- let balls = [];
+ let balls = []; // Holds rocket ships
+ let spaceKitties = [];
+ let lastLaunchTime = 0;
 
  // Central Gravity Node Definition
  const centralNode = {
@@ -150,6 +159,30 @@
 
  // Re-generate procedural space background for current screen resolution
  generateSpaceBackground();
+
+ // Initialize or re-position floating space kitties
+ if (spaceKitties.length === 0) {
+ initSpaceKitties();
+ }
+ }
+
+ function initSpaceKitties() {
+ spaceKitties = [];
+ const numKitties = 7;
+ const colors = ['#f97316', '#e2e8f0', '#fbbf24', '#f472b6', '#a855f7', '#38bdf8'];
+ 
+ for (let i = 0; i < numKitties; i++) {
+ spaceKitties.push({
+ x: Math.random() * (canvas.width - 100) + 50,
+ y: Math.random() * (canvas.height - 100) + 50,
+ vx: (Math.random() - 0.5) * 1.5,
+ vy: (Math.random() - 0.5) * 1.5,
+ radius: 18,
+ angle: Math.random() * Math.PI * 2,
+ spinSpeed: (Math.random() - 0.5) * 0.02,
+ furColor: colors[i % colors.length]
+ });
+ }
  }
 
  function generateSpaceBackground() {
@@ -223,7 +256,6 @@
  function drawCowAndMoon(gCtx, x, y) {
  gCtx.save();
  
- // Moon Outer Glow
  const moonRadius = 32;
  const moonGlow = gCtx.createRadialGradient(x, y, moonRadius * 0.8, x, y, moonRadius * 1.8);
  moonGlow.addColorStop(0, 'rgba(254, 243, 199, 0.35)');
@@ -234,7 +266,6 @@
  gCtx.fillStyle = moonGlow;
  gCtx.fill();
 
- // Moon Body
  const moonGrad = gCtx.createRadialGradient(x - 8, y - 8, 4, x, y, moonRadius);
  moonGrad.addColorStop(0, '#fffbeb');
  moonGrad.addColorStop(0.7, '#fde68a');
@@ -245,7 +276,6 @@
  gCtx.fillStyle = moonGrad;
  gCtx.fill();
 
- // Craters
  gCtx.fillStyle = 'rgba(180, 83, 9, 0.18)';
  const craters = [
  { cx: x - 10, cy: y - 6, r: 6 },
@@ -259,7 +289,6 @@
  gCtx.fill();
  });
 
- // Jump Arc Trail
  gCtx.beginPath();
  gCtx.ellipse(x, y + 8, 48, 32, -Math.PI / 12, Math.PI * 1.05, Math.PI * 1.88);
  gCtx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
@@ -268,20 +297,17 @@
  gCtx.stroke();
  gCtx.setLineDash([]);
 
- // Cow Leaping Over Moon
  const cowX = x + 10;
  const cowY = y - 40;
  
  gCtx.translate(cowX, cowY);
  gCtx.rotate(-15 * Math.PI / 180);
 
- // Cow Body
  gCtx.fillStyle = '#ffffff';
  gCtx.beginPath();
  gCtx.ellipse(0, 0, 16, 10, 0, 0, Math.PI * 2);
  gCtx.fill();
 
- // Black Spots
  gCtx.fillStyle = '#111111';
  gCtx.beginPath();
  gCtx.arc(-5, -3, 4, 0, Math.PI * 2);
@@ -289,26 +315,22 @@
  gCtx.arc(-2, 4, 3, 0, Math.PI * 2);
  gCtx.fill();
 
- // Cow Head
  gCtx.fillStyle = '#ffffff';
  gCtx.beginPath();
  gCtx.arc(-15, -5, 7, 0, Math.PI * 2);
  gCtx.fill();
 
- // Pink Snout
  gCtx.fillStyle = '#f472b6';
  gCtx.beginPath();
  gCtx.ellipse(-19, -3, 4, 3, 0, 0, Math.PI * 2);
  gCtx.fill();
 
- // Eye & Nostril
  gCtx.fillStyle = '#000000';
  gCtx.beginPath();
  gCtx.arc(-15, -7, 1, 0, Math.PI * 2);
  gCtx.arc(-20, -4, 0.7, 0, Math.PI * 2);
  gCtx.fill();
 
- // Horns
  gCtx.fillStyle = '#fbbf24';
  gCtx.beginPath();
  gCtx.moveTo(-13, -11);
@@ -316,13 +338,11 @@
  gCtx.lineTo(-10, -11);
  gCtx.fill();
 
- // Ears
  gCtx.fillStyle = '#ffffff';
  gCtx.beginPath();
  gCtx.ellipse(-11, -8, 3, 1.8, Math.PI / 4, 0, Math.PI * 2);
  gCtx.fill();
 
- // Leaping Legs
  gCtx.strokeStyle = '#ffffff';
  gCtx.lineWidth = 2.5;
  gCtx.lineCap = 'round';
@@ -338,7 +358,6 @@
  gCtx.lineTo(17, 8);
  gCtx.stroke();
 
- // Hooves
  gCtx.fillStyle = '#111111';
  gCtx.beginPath();
  gCtx.arc(-15, 13, 1.5, 0, Math.PI * 2);
@@ -347,7 +366,6 @@
  gCtx.arc(17, 8, 1.5, 0, Math.PI * 2);
  gCtx.fill();
 
- // Tail
  gCtx.strokeStyle = '#ffffff';
  gCtx.lineWidth = 1.5;
  gCtx.beginPath();
@@ -445,8 +463,14 @@
  window.addEventListener('resize', resizeCanvas);
  resizeCanvas();
 
- // Canvas Click / Touch Handler: Launch Earth at position
+ // Canvas Click / Touch Handler with 1-second Spam-Click Filter Baseline Requirement
  canvas.addEventListener('pointerdown', (e) => {
+ const now = Date.now();
+ if (now - lastLaunchTime < LAUNCH_COOLDOWN_MS) {
+ return; // Rate-limit launches to no more than 1 per second
+ }
+ lastLaunchTime = now;
+
  const rect = canvas.getBoundingClientRect();
  const clickX = e.clientX - rect.left;
  const clickY = e.clientY - rect.top;
@@ -459,7 +483,10 @@
  const vx = LAUNCH_VELOCITY * Math.sin(rad);
  const vy = -LAUNCH_VELOCITY * Math.cos(rad);
 
- // Remove oldest planet if capacity reached
+ // Pick a random color for the rocket body
+ const randomColor = ROCKET_PALETTE[Math.floor(Math.random() * ROCKET_PALETTE.length)];
+
+ // Remove oldest rocket if capacity reached
  if (balls.length >= MAX_BALLS) {
  balls.shift();
  }
@@ -469,16 +496,19 @@
  y: y,
  vx: vx,
  vy: vy,
- radius: 10,
+ radius: 12,
+ color: randomColor,
  trail: []
  });
  }
 
  function resetSimulation() {
  balls = [];
+ initSpaceKitties();
  }
 
  function updatePhysics() {
+ // 1. Update Rocket Physics
  for (let i = balls.length - 1; i >= 0; i--) {
  const b = balls[i];
 
@@ -514,71 +544,223 @@
  b.trail.shift();
  }
  }
+
+ // 2. Update Space Kitties position and floating bounds
+ for (const k of spaceKitties) {
+ k.x += k.vx;
+ k.y += k.vy;
+ k.angle += k.spinSpeed;
+
+ // Soft wrap-around boundaries for continuous floating
+ const margin = 40;
+ if (k.x < -margin) k.x = canvas.width + margin;
+ if (k.x > canvas.width + margin) k.x = -margin;
+ if (k.y < -margin) k.y = canvas.height + margin;
+ if (k.y > canvas.height + margin) k.y = -margin;
  }
 
- function drawEarth(x, y, radius) {
+ // 3. Rocket <-> Space Kitty Collision Detection & Bouncing Physics
+ for (const r of balls) {
+ for (const k of spaceKitties) {
+ const dx = k.x - r.x;
+ const dy = k.y - r.y;
+ const dist = Math.hypot(dx, dy);
+ const minDist = r.radius + k.radius;
+
+ if (dist < minDist && dist > 0) {
+ // Normal collision vector
+ const nx = dx / dist;
+ const ny = dy / dist;
+
+ // Relative velocity
+ const rvx = r.vx - k.vx;
+ const rvy = r.vy - k.vy;
+
+ // Velocity along normal vector
+ const velAlongNormal = rvx * nx + rvy * ny;
+
+ // Check if moving towards each other
+ if (velAlongNormal > 0) {
+ const e = 0.9; // Bounciness elasticity factor
+ const mRocket = 1.0;
+ const mKitty = 1.5;
+
+ const j = (1 + e) * velAlongNormal / (1 / mRocket + 1 / mKitty);
+
+ // Apply bounce impulses
+ r.vx -= (1 / mRocket) * j * nx;
+ r.vy -= (1 / mRocket) * j * ny;
+
+ k.vx += (1 / mKitty) * j * nx;
+ k.vy += (1 / mKitty) * j * ny;
+
+ // Positional adjustment to prevent overlap
+ const overlap = minDist - dist;
+ r.x -= nx * (overlap * 0.5);
+ r.y -= ny * (overlap * 0.5);
+ k.x += nx * (overlap * 0.5);
+ k.y += ny * (overlap * 0.5);
+ }
+ }
+ }
+ }
+ }
+
+ // Draw Rocket Ship
+ function drawRocket(r) {
  ctx.save();
- ctx.translate(x, y);
+ ctx.translate(r.x, r.y);
 
- // 1. Atmosphere Glow
+ // Point in movement direction
+ const angle = Math.atan2(r.vy, r.vx);
+ ctx.rotate(angle);
+
+ // Animated Thruster Flame
+ const flameLength = 10 + Math.random() * 8;
+ const flameGrad = ctx.createLinearGradient(-10, 0, -10 - flameLength, 0);
+ flameGrad.addColorStop(0, '#ffee55');
+ flameGrad.addColorStop(0.5, '#ff7700');
+ flameGrad.addColorStop(1, 'rgba(255, 0, 0, 0)');
+
  ctx.beginPath();
- ctx.arc(0, 0, radius + 2.5, 0, Math.PI * 2);
- ctx.fillStyle = 'rgba(100, 200, 255, 0.35)';
+ ctx.moveTo(-8, -4);
+ ctx.lineTo(-10 - flameLength, 0);
+ ctx.lineTo(-8, 4);
+ ctx.closePath();
+ ctx.fillStyle = flameGrad;
  ctx.fill();
 
- // 2. Ocean
+ // Tail Fins
+ ctx.fillStyle = '#475569';
  ctx.beginPath();
- ctx.arc(0, 0, radius, 0, Math.PI * 2);
- ctx.fillStyle = '#1c75bc';
- ctx.fill();
-
- ctx.clip();
-
- // 3. Continents
- ctx.fillStyle = '#38b000';
- ctx.beginPath();
- ctx.arc(-radius * 0.3, -radius * 0.3, radius * 0.5, 0, Math.PI * 2);
- ctx.fill();
-
- ctx.beginPath();
- ctx.arc(radius * 0.35, -radius * 0.1, radius * 0.45, 0, Math.PI * 2);
- ctx.fill();
-
- ctx.beginPath();
- ctx.arc(-radius * 0.1, radius * 0.45, radius * 0.5, 0, Math.PI * 2);
- ctx.fill();
-
- // 4. Ice Caps
- ctx.fillStyle = '#ffffff';
- ctx.beginPath();
- ctx.arc(0, -radius * 0.85, radius * 0.5, 0, Math.PI * 2);
+ ctx.moveTo(-8, -3);
+ ctx.lineTo(-14, -9);
+ ctx.lineTo(-4, -3);
+ ctx.closePath();
  ctx.fill();
 
  ctx.beginPath();
- ctx.arc(0, radius * 0.85, radius * 0.4, 0, Math.PI * 2);
+ ctx.moveTo(-8, 3);
+ ctx.lineTo(-14, 9);
+ ctx.lineTo(-4, 3);
+ ctx.closePath();
  ctx.fill();
 
- // 5. Clouds
- ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
- ctx.lineWidth = radius * 0.22;
- ctx.lineCap = 'round';
+ // Rocket Body Cylinder
+ ctx.fillStyle = '#e2e8f0';
  ctx.beginPath();
- ctx.arc(0, 0, radius * 0.55, -Math.PI * 0.3, Math.PI * 0.3);
+ ctx.ellipse(-1, 0, 9, 5, 0, 0, Math.PI * 2);
+ ctx.fill();
+
+ // Colorful Rocket Nose Cone
+ ctx.fillStyle = r.color;
+ ctx.beginPath();
+ ctx.moveTo(4, -5);
+ ctx.quadraticCurveTo(15, 0, 4, 5);
+ ctx.closePath();
+ ctx.fill();
+
+ // Window / Cockpit Glass
+ ctx.fillStyle = '#38bdf8';
+ ctx.beginPath();
+ ctx.arc(1, -1, 3, 0, Math.PI * 2);
+ ctx.fill();
+ ctx.strokeStyle = '#ffffff';
+ ctx.lineWidth = 0.8;
  ctx.stroke();
 
- // 6. 3D Shading
- const shadeGrad = ctx.createRadialGradient(
- -radius * 0.3, -radius * 0.3, radius * 0.1,
- 0, 0, radius
- );
- shadeGrad.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
- shadeGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0)');
- shadeGrad.addColorStop(1, 'rgba(0, 0, 0, 0.55)');
+ ctx.restore();
+ }
 
- ctx.fillStyle = shadeGrad;
+ // Draw Floating Space Kitty
+ function drawSpaceKitty(k) {
+ ctx.save();
+ ctx.translate(k.x, k.y);
+ ctx.rotate(k.angle);
+
+ const r = k.radius;
+
+ // Space Helmet Outer Bubble
+ const helmetGrad = ctx.createRadialGradient(-3, -3, 2, 0, 0, r + 4);
+ helmetGrad.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+ helmetGrad.addColorStop(0.7, 'rgba(56, 189, 248, 0.2)');
+ helmetGrad.addColorStop(1, 'rgba(255, 255, 255, 0.5)');
+
  ctx.beginPath();
- ctx.arc(0, 0, radius, 0, Math.PI * 2);
+ ctx.arc(0, 0, r + 3, 0, Math.PI * 2);
+ ctx.fillStyle = helmetGrad;
  ctx.fill();
+ ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+ ctx.lineWidth = 1;
+ ctx.stroke();
+
+ // Kitty Ears
+ ctx.fillStyle = k.furColor;
+ ctx.beginPath();
+ ctx.moveTo(-10, -10);
+ ctx.lineTo(-5, -19);
+ ctx.lineTo(-1, -11);
+ ctx.fill();
+
+ ctx.beginPath();
+ ctx.moveTo(1, -11);
+ ctx.lineTo(5, -19);
+ ctx.lineTo(10, -10);
+ ctx.fill();
+
+ // Pink Inner Ears
+ ctx.fillStyle = '#f472b6';
+ ctx.beginPath();
+ ctx.moveTo(-8, -11);
+ ctx.lineTo(-5, -16);
+ ctx.lineTo(-3, -11);
+ ctx.fill();
+
+ ctx.beginPath();
+ ctx.moveTo(3, -11);
+ ctx.lineTo(5, -16);
+ ctx.lineTo(8, -11);
+ ctx.fill();
+
+ // Kitty Head
+ ctx.fillStyle = k.furColor;
+ ctx.beginPath();
+ ctx.arc(0, 0, r - 2, 0, Math.PI * 2);
+ ctx.fill();
+
+ // Eyes
+ ctx.fillStyle = '#0f172a';
+ ctx.beginPath();
+ ctx.arc(-5, -3, 2.2, 0, Math.PI * 2);
+ ctx.arc(5, -3, 2.2, 0, Math.PI * 2);
+ ctx.fill();
+
+ // Eye shine
+ ctx.fillStyle = '#ffffff';
+ ctx.beginPath();
+ ctx.arc(-5.8, -3.8, 0.8, 0, Math.PI * 2);
+ ctx.arc(4.2, -3.8, 0.8, 0, Math.PI * 2);
+ ctx.fill();
+
+ // Pink Nose
+ ctx.fillStyle = '#f472b6';
+ ctx.beginPath();
+ ctx.polygon = [0, 1, -2, -1, 2, -1];
+ ctx.moveTo(0, 1);
+ ctx.lineTo(-2, -1);
+ ctx.lineTo(2, -1);
+ ctx.closePath();
+ ctx.fill();
+
+ // Whiskers
+ ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+ ctx.lineWidth = 0.8;
+ ctx.beginPath();
+ ctx.moveTo(-4, 1); ctx.lineTo(-13, -1);
+ ctx.moveTo(-4, 2); ctx.lineTo(-13, 3);
+ ctx.moveTo(4, 1); ctx.lineTo(13, -1);
+ ctx.moveTo(4, 2); ctx.lineTo(13, 3);
+ ctx.stroke();
 
  ctx.restore();
  }
@@ -613,7 +795,12 @@
  ctx.fill();
  ctx.restore();
 
- // 3. Draw Orbit Trail & Earth Planets
+ // 3. Draw Space Kitties
+ for (const k of spaceKitties) {
+ drawSpaceKitty(k);
+ }
+
+ // 4. Draw Orbit Trail & Colorful Rockets
  for (const b of balls) {
  if (b.trail.length > 1) {
  ctx.beginPath();
@@ -621,12 +808,12 @@
  for (let t = 1; t < b.trail.length; t++) {
  ctx.lineTo(b.trail[t].x, b.trail[t].y);
  }
- ctx.strokeStyle = 'rgba(120, 200, 255, 0.7)';
+ ctx.strokeStyle = b.color + 'aa';
  ctx.lineWidth = 1.5;
  ctx.stroke();
  }
 
- drawEarth(b.x, b.y, b.radius);
+ drawRocket(b);
  }
  }
 

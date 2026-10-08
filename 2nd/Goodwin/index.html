@@ -37,6 +37,12 @@
    border-bottom: 1px solid #334466;
  }
 
+ .header-left {
+   display: flex;
+   align-items: center;
+   gap: 16px;
+ }
+
  h1 {
    font-size: 18px;
    letter-spacing: 2px;
@@ -44,6 +50,26 @@
    font-weight: bold;
    color: #ffd700;
    text-shadow: 0 0 8px rgba(255, 215, 0, 0.4);
+ }
+
+ /* Cooldown Badge */
+ #cooldown-status {
+   font-size: 12px;
+   font-weight: bold;
+   padding: 4px 10px;
+   border-radius: 12px;
+   text-transform: uppercase;
+   letter-spacing: 1px;
+   background: rgba(0, 230, 118, 0.2);
+   color: #00e676;
+   border: 1px solid #00e676;
+   transition: all 0.2s ease;
+ }
+
+ #cooldown-status.cooldown-active {
+   background: rgba(255, 23, 68, 0.2);
+   color: #ff1744;
+   border-color: #ff1744;
  }
 
  .btn-reset {
@@ -99,7 +125,10 @@
 
  <!-- Header Section -->
  <div id="header">
-   <h1>Gravity Simulation</h1>
+   <div class="header-left">
+     <h1>Gravity Simulation</h1>
+     <div id="cooldown-status">READY</div>
+   </div>
    <button class="btn-reset" onclick="resetSimulation()">Reset</button>
  </div>
 
@@ -115,6 +144,7 @@
  <script>
  const canvas = document.getElementById('simCanvas');
  const ctx = canvas.getContext('2d');
+ const cooldownStatusEl = document.getElementById('cooldown-status');
 
  // SIMULATION CONSTANTS
  const GRAVITY_CONSTANT = 1800; // Strength of gravitational pull (G)
@@ -144,7 +174,6 @@
  };
 
  function generateSpaceBackground() {
-   // Starfield
    stars = [];
    const starCount = Math.floor((canvas.width * canvas.height) / 2500);
    for (let i = 0; i < starCount; i++) {
@@ -157,14 +186,12 @@
      });
    }
 
-   // Nebulas
    nebulas = [
      { x: canvas.width * 0.15, y: canvas.height * 0.25, radius: Math.max(canvas.width, canvas.height) * 0.4, color: 'rgba(150, 30, 220, 0.28)' },
      { x: canvas.width * 0.85, y: canvas.height * 0.75, radius: Math.max(canvas.width, canvas.height) * 0.45, color: 'rgba(0, 180, 216, 0.25)' },
      { x: canvas.width * 0.5, y: canvas.height * 0.85, radius: Math.max(canvas.width, canvas.height) * 0.35, color: 'rgba(247, 37, 133, 0.22)' }
    ];
 
-   // Planets
    planets = [
      {
        x: canvas.width * 0.15,
@@ -185,7 +212,6 @@
      }
    ];
 
-   // Asteroids
    generateAsteroids();
  }
 
@@ -193,7 +219,6 @@
    asteroids = [];
    const count = 5;
    for (let i = 0; i < count; i++) {
-     // Spawn asteroids away from central sun
      let ax, ay;
      do {
        ax = Math.random() * canvas.width;
@@ -235,11 +260,12 @@
  window.addEventListener('resize', resizeCanvas);
  resizeCanvas();
 
- // SLINGSHOT POINTER EVENTS
+ // SPAM-CLICK FILTER & POINTER EVENTS
  canvas.addEventListener('pointerdown', (e) => {
    const now = Date.now();
+   // Spam Filter: Reject input if cooldown has not elapsed
    if (now - lastLaunchTime < LAUNCH_COOLDOWN_MS) {
-     return; // Spam filter cooldown active
+     return;
    }
 
    const rect = canvas.getBoundingClientRect();
@@ -260,26 +286,38 @@
    isDragging = false;
 
    const now = Date.now();
+   // Spam Filter Check on launch release
    if (now - lastLaunchTime < LAUNCH_COOLDOWN_MS) return;
 
-   // Slingshot Pull Vector (Dragging backward launches forward)
    const dx = dragStart.x - dragCurrent.x;
    const dy = dragStart.y - dragCurrent.y;
    const dragDistance = Math.hypot(dx, dy);
 
    if (dragDistance > 6) {
-     const baseSpeed = Math.min(dragDistance * 0.07, 12); // Speed scales with pull distance
+     const baseSpeed = Math.min(dragDistance * 0.07, 12);
      const baseAngle = Math.atan2(dy, dx);
      launchShips360(dragStart.x, dragStart.y, baseAngle, baseSpeed);
-     lastLaunchTime = now;
+     lastLaunchTime = now; // Record launch timestamp for spam filter
    }
  });
 
  canvas.addEventListener('pointercancel', () => { isDragging = false; });
 
+ function updateCooldownUI() {
+   const elapsed = Date.now() - lastLaunchTime;
+   if (elapsed < LAUNCH_COOLDOWN_MS) {
+     const remainingSec = ((LAUNCH_COOLDOWN_MS - elapsed) / 1000).toFixed(1);
+     cooldownStatusEl.textContent = `RECHARGING (${remainingSec}s)`;
+     cooldownStatusEl.classList.add('cooldown-active');
+   } else {
+     cooldownStatusEl.textContent = 'READY';
+     cooldownStatusEl.classList.remove('cooldown-active');
+   }
+ }
+
  function launchShips360(x, y, baseAngle, launchSpeed) {
    const shipCount = 5;
-   const angleStep = (Math.PI * 2) / shipCount; // 360 degrees spread evenly
+   const angleStep = (Math.PI * 2) / shipCount;
    const colors = ['#00e5ff', '#ff3366', '#76ff03', '#ffea00', '#d500f9'];
 
    for (let i = 0; i < shipCount; i++) {
@@ -294,7 +332,7 @@
        vy: vy,
        radius: 6,
        color: colors[i % colors.length],
-       designType: Math.floor(Math.random() * 4) // Pick 1 of 4 rocket designs
+       designType: Math.floor(Math.random() * 4)
      });
    }
  }
@@ -344,20 +382,19 @@
  }
 
  function updatePhysics() {
-   // Update Asteroids
+   // Asteroids
    for (const ast of asteroids) {
      ast.x += ast.vx;
      ast.y += ast.vy;
      ast.angle += ast.spin;
 
-     // Screen wrap
      if (ast.x < -ast.radius) ast.x = canvas.width + ast.radius;
      if (ast.x > canvas.width + ast.radius) ast.x = -ast.radius;
      if (ast.y < -ast.radius) ast.y = canvas.height + ast.radius;
      if (ast.y > canvas.height + ast.radius) ast.y = -ast.radius;
    }
 
-   // Update Explosion Particles
+   // Explosions
    for (let i = explosionParticles.length - 1; i >= 0; i--) {
      const p = explosionParticles[i];
      p.x += p.vx;
@@ -372,7 +409,7 @@
      }
    }
 
-   // Update Fire Trail Particles
+   // Thruster Trails
    for (let i = fireParticles.length - 1; i >= 0; i--) {
      const fp = fireParticles[i];
      fp.x += fp.vx;
@@ -386,11 +423,10 @@
      }
    }
 
-   // Update Rockets
+   // Rockets
    for (let i = ships.length - 1; i >= 0; i--) {
      const s = ships[i];
 
-     // Remove if too far off screen
      const margin = 500;
      if (s.x < -margin || s.x > canvas.width + margin || 
          s.y < -margin || s.y > canvas.height + margin) {
@@ -398,20 +434,17 @@
        continue;
      }
 
-     // Distance vector to central sun
      const dx = centralNode.x - s.x;
      const dy = centralNode.y - s.y;
      const distSq = dx * dx + dy * dy;
      const dist = Math.sqrt(distSq);
 
-     // Sun Collision check
      if (dist < centralNode.radius + s.radius) {
        triggerExplosion(s.x, s.y, s.color);
        ships.splice(i, 1);
        continue;
      }
 
-     // Asteroid Collisions (Bounce physics)
      for (const ast of asteroids) {
        const adx = s.x - ast.x;
        const ady = s.y - ast.y;
@@ -419,17 +452,14 @@
        const minDist = s.radius + ast.radius;
 
        if (adist < minDist && adist > 0) {
-         // Collision normal vector
          const nx = adx / adist;
          const ny = ady / adist;
 
-         // Dot product velocity reflection
          const dot = s.vx * nx + s.vy * ny;
          if (dot < 0) {
            s.vx = s.vx - 2 * dot * nx;
            s.vy = s.vy - 2 * dot * ny;
 
-           // Reposition out of asteroid radius to avoid clipping
            s.x = ast.x + nx * (minDist + 1);
            s.y = ast.y + ny * (minDist + 1);
 
@@ -438,7 +468,6 @@
        }
      }
 
-     // Gravity acceleration
      const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
      s.vx += acceleration * (dx / dist);
      s.vy += acceleration * (dy / dist);
@@ -446,7 +475,6 @@
      s.x += s.vx;
      s.y += s.vy;
 
-     // Spawn Fire Particles for Thruster Trail
      const shipAngle = Math.atan2(s.vy, s.vx);
      const tailX = s.x - Math.cos(shipAngle) * 8;
      const tailY = s.y - Math.sin(shipAngle) * 8;
@@ -471,7 +499,6 @@
    ctx.fillStyle = '#050512';
    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-   // Nebulas
    for (const neb of nebulas) {
      const grad = ctx.createRadialGradient(neb.x, neb.y, 0, neb.x, neb.y, neb.radius);
      grad.addColorStop(0, neb.color);
@@ -480,7 +507,6 @@
      ctx.fillRect(0, 0, canvas.width, canvas.height);
    }
 
-   // Planets
    for (const p of planets) {
      ctx.save();
      if (p.hasRing) {
@@ -510,7 +536,6 @@
      ctx.restore();
    }
 
-   // Stars
    for (const star of stars) {
      ctx.save();
      ctx.globalAlpha = star.alpha;
@@ -586,7 +611,7 @@
    ctx.rotate(angle);
 
    switch (s.designType) {
-     case 0: // Classic Rocket
+     case 0:
        ctx.fillStyle = s.color;
        ctx.beginPath();
        ctx.moveTo(11, 0);
@@ -609,7 +634,7 @@
        ctx.fill();
        break;
 
-     case 1: // Flying Saucer
+     case 1:
        ctx.fillStyle = s.color;
        ctx.beginPath();
        ctx.ellipse(0, 0, 10, 5, 0, 0, Math.PI * 2);
@@ -621,7 +646,7 @@
        ctx.fill();
        break;
 
-     case 2: // Delta Fighter
+     case 2:
        ctx.fillStyle = s.color;
        ctx.beginPath();
        ctx.moveTo(12, 0);
@@ -640,7 +665,7 @@
        ctx.fill();
        break;
 
-     case 3: // Heavy Capsule Shuttle
+     case 3:
        ctx.fillStyle = s.color;
        ctx.beginPath();
        ctx.roundRect(-7, -5, 14, 10, 3);
@@ -690,7 +715,6 @@
 
    if (dist < 5) return;
 
-   // Elastic Band Line
    ctx.save();
    ctx.beginPath();
    ctx.moveTo(dragStart.x, dragStart.y);
@@ -700,13 +724,11 @@
    ctx.setLineDash([4, 4]);
    ctx.stroke();
 
-   // Slingshot Origin Anchor Pin
    ctx.beginPath();
    ctx.arc(dragStart.x, dragStart.y, 6, 0, Math.PI * 2);
    ctx.fillStyle = '#ffd700';
    ctx.fill();
 
-   // Aim Indicator Line (Forward Trajectory)
    const angle = Math.atan2(dy, dx);
    const aimLength = Math.min(dist, 100);
    const aimX = dragStart.x + Math.cos(angle) * aimLength;
@@ -727,24 +749,19 @@
    drawBackground();
    drawAsteroids();
    drawSun();
-
-   // Draw Thruster Fire Particles
    drawFireParticles();
 
-   // Draw Rockets
    for (const s of ships) {
      drawRocket(s);
    }
 
-   // Draw Sun & Asteroid Bounce Sparks
    drawExplosionParticles();
-
-   // Draw Active Slingshot UI Preview
    drawSlingshotUI();
  }
 
  function animate() {
    updatePhysics();
+   updateCooldownUI();
    draw();
    requestAnimationFrame(animate);
  }
