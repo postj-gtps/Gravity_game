@@ -181,7 +181,7 @@
     </div>
 
     <div class="instructions">
-        Click or tap anywhere to launch rockets (max 1 launch/sec). Rockets bounce off planets and asteroids!
+        Click or tap anywhere to launch rockets (max 1 launch/sec). Rockets bounce off planets, asteroids, and astronauts!
     </div>
 
     <script>
@@ -206,11 +206,14 @@
         const SOFTENING_FACTOR = 400;      // Prevents infinite velocity near planet centers
         const SPAM_LIMIT_MS = 1000;        // Spam click filter threshold (1 second)
         const NUM_ASTEROIDS = 6;           // Number of floating asteroids in scene
+        const NUM_ASTRONAUTS = 5;          // Number of floating astronauts in scene
         const MAX_BALLS = 120;             // Upper cap on screen objects
 
         // STATE VARIABLES
         let balls = [];
         let asteroids = [];
+        let astronauts = [];
+        let particles = [];
         let highlightedPlanetKey = 'earth';
         let lastLaunchTime = 0;
         let rocketsPerLaunch = 1;
@@ -233,7 +236,6 @@
             for (let i = 0; i < NUM_ASTEROIDS; i++) {
                 let x, y, tooCloseToPlanet;
 
-                // Spawn asteroids away from planet positions
                 do {
                     tooCloseToPlanet = false;
                     x = Math.random() * canvas.width;
@@ -250,7 +252,6 @@
                     }
                 } while (tooCloseToPlanet);
 
-                // Asteroids reduced to 1/2 size (radius range 9 to 15)
                 const radius = Math.random() * 6 + 9;
                 const speed = Math.random() * 1.2 + 0.6;
                 const angle = Math.random() * Math.PI * 2;
@@ -275,6 +276,64 @@
             }
         }
 
+        function createAstronauts() {
+            astronauts = [];
+            for (let i = 0; i < NUM_ASTRONAUTS; i++) {
+                let x, y, tooCloseToPlanet;
+
+                do {
+                    tooCloseToPlanet = false;
+                    x = Math.random() * canvas.width;
+                    y = Math.random() * canvas.height;
+
+                    for (const key in PLANETS) {
+                        const p = PLANETS[key];
+                        const dx = x - p.x;
+                        const dy = y - p.y;
+                        if (Math.sqrt(dx * dx + dy * dy) < p.radius + 40) {
+                            tooCloseToPlanet = true;
+                            break;
+                        }
+                    }
+                } while (tooCloseToPlanet);
+
+                const speed = Math.random() * 1.0 + 0.5;
+                const angle = Math.random() * Math.PI * 2;
+
+                astronauts.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    radius: 8, // Twice the radius of the rocket balls (radius = 4)
+                    mass: 4,   // Heavier mass for elastic collisions
+                    rotAngle: Math.random() * Math.PI * 2,
+                    rotSpeed: (Math.random() - 0.5) * 0.02
+                });
+            }
+        }
+
+        function createSparklyExplosion(x, y) {
+            const particleCount = 35;
+            const colors = ['#ffffff', '#00e5ff', '#ffea00', '#ff007f', '#a8ff00'];
+
+            for (let i = 0; i < particleCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 4 + 1.5;
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    size: Math.random() * 3 + 2,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    life: 1.0,
+                    decay: Math.random() * 0.025 + 0.015,
+                    sparkle: Math.random() > 0.4
+                });
+            }
+        }
+
         function resizeCanvas() {
             const wrapper = document.getElementById('canvas-wrapper');
             canvas.width = wrapper.clientWidth;
@@ -284,6 +343,9 @@
 
             if (asteroids.length === 0) {
                 createAsteroids();
+            }
+            if (astronauts.length === 0) {
+                createAstronauts();
             }
         }
 
@@ -336,6 +398,7 @@
                     vx: vx,
                     vy: vy,
                     radius: 4,
+                    mass: 1,
                     trail: []
                 });
             }
@@ -343,11 +406,13 @@
 
         function resetSimulation() {
             balls = [];
+            particles = [];
             createAsteroids();
+            createAstronauts();
         }
 
         function updatePhysics() {
-            // 1. Update Asteroids (Independent movement, no interaction with planets)
+            // 1. Update Asteroids
             for (const ast of asteroids) {
                 ast.x += ast.vx;
                 ast.y += ast.vy;
@@ -369,13 +434,69 @@
                 }
             }
 
-            // 2. Update Rockets Physics & Planet/Asteroid Collisions
+            // 2. Update Astronauts (Movement & Boundary Collisions)
+            for (const astro of astronauts) {
+                astro.x += astro.vx;
+                astro.y += astro.vy;
+                astro.rotAngle += astro.rotSpeed;
+
+                if (astro.x - astro.radius < 0) {
+                    astro.x = astro.radius;
+                    astro.vx *= -1;
+                } else if (astro.x + astro.radius > canvas.width) {
+                    astro.x = canvas.width - astro.radius;
+                    astro.vx *= -1;
+                }
+                if (astro.y - astro.radius < 0) {
+                    astro.y = astro.radius;
+                    astro.vy *= -1;
+                } else if (astro.y + astro.radius > canvas.height) {
+                    astro.y = canvas.height - astro.radius;
+                    astro.vy *= -1;
+                }
+
+                // Bounce Astronauts off Planet surfaces
+                for (const key in PLANETS) {
+                    const p = PLANETS[key];
+                    const dx = astro.x - p.x;
+                    const dy = astro.y - p.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const minDist = p.radius + astro.radius;
+
+                    if (dist < minDist) {
+                        const nx = dx / (dist || 1);
+                        const ny = dy / (dist || 1);
+                        astro.x += nx * (minDist - dist);
+                        const dot = astro.vx * nx + astro.vy * ny;
+                        if (dot < 0) {
+                            astro.vx -= 2 * dot * nx;
+                            astro.vy -= 2 * dot * ny;
+                        }
+                    }
+                }
+            }
+
+            // 3. Astronaut vs Asteroid Collision (Destroys Asteroid in Sparkly Explosion)
+            for (const astro of astronauts) {
+                for (let j = asteroids.length - 1; j >= 0; j--) {
+                    const ast = asteroids[j];
+                    const dx = ast.x - astro.x;
+                    const dy = ast.y - astro.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < ast.radius + astro.radius) {
+                        createSparklyExplosion(ast.x, ast.y);
+                        asteroids.splice(j, 1);
+                    }
+                }
+            }
+
+            // 4. Update Rockets Physics & Collisions
             let newBallsToSpawn = [];
 
             for (let i = balls.length - 1; i >= 0; i--) {
                 const b = balls[i];
 
-                // Remove ball if it travels too far off-screen
                 const margin = 500;
                 if (b.x < -margin || b.x > canvas.width + margin || 
                     b.y < -margin || b.y > canvas.height + margin) {
@@ -383,7 +504,7 @@
                     continue;
                 }
 
-                // Apply gravitational forces from ALL static scattered planets
+                // Gravitational Pull from Planets
                 for (const key in PLANETS) {
                     const planet = PLANETS[key];
                     const dx = planet.x - b.x;
@@ -398,11 +519,10 @@
                     }
                 }
 
-                // Move rocket
                 b.x += b.vx;
                 b.y += b.vy;
 
-                // Collision with Planets (Static Obstacles -> Rockets bounce off)
+                // Planet Collision (Bounce off)
                 for (const key in PLANETS) {
                     const planet = PLANETS[key];
                     const pdx = b.x - planet.x;
@@ -414,21 +534,16 @@
                         const pnx = pdx / (pdist || 1);
                         const pny = pdy / (pdist || 1);
 
-                        // Push rocket out of planet body
-                        const overlap = minDist - pdist;
-                        b.x += pnx * overlap;
-                        b.y += pny * overlap;
-
+                        b.x += pnx * (minDist - pdist);
                         const pdot = b.vx * pnx + b.vy * pny;
                         if (pdot < 0) {
-                            // Elastic bounce off planet surface
                             b.vx = b.vx - 2 * pdot * pnx;
                             b.vy = b.vy - 2 * pdot * pny;
                         }
                     }
                 }
 
-                // Asteroid Collision Detection & Spawning Logic
+                // Asteroid Collision (Spawns new ball)
                 for (const ast of asteroids) {
                     const adx = b.x - ast.x;
                     const ady = b.y - ast.y;
@@ -439,10 +554,7 @@
                         const nx = adx / (adist || 1);
                         const ny = ady / (adist || 1);
 
-                        const overlap = minDist - adist;
-                        b.x += nx * overlap;
-                        b.y += ny * overlap;
-
+                        b.x += nx * (minDist - adist);
                         const dot = b.vx * nx + b.vy * ny;
 
                         if (dot < 0) {
@@ -460,9 +572,49 @@
                                     vx: Math.cos(scatterAngle) * currentSpeed,
                                     vy: Math.sin(scatterAngle) * currentSpeed,
                                     radius: 4,
+                                    mass: 1,
                                     trail: []
                                 });
                             }
+                        }
+                    }
+                }
+
+                // Astronaut Collision (2D Elastic Bounce according to Newton's Laws - NO new balls spawned)
+                for (const astro of astronauts) {
+                    const dx = astro.x - b.x;
+                    const dy = astro.y - b.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const minDist = astro.radius + b.radius;
+
+                    if (dist < minDist) {
+                        const nx = dx / (dist || 1);
+                        const ny = dy / (dist || 1);
+
+                        // Position correction to prevent sticking
+                        const overlap = minDist - dist;
+                        const mSum = b.mass + astro.mass;
+                        b.x -= nx * overlap * (astro.mass / mSum);
+                        b.y -= ny * overlap * (astro.mass / mSum);
+                        astro.x += nx * overlap * (b.mass / mSum);
+                        astro.y += ny * overlap * (b.mass / mSum);
+
+                        // Relative velocity along collision normal
+                        const rvx = astro.vx - b.vx;
+                        const rvy = astro.vy - b.vy;
+                        const velAlongNormal = rvx * nx + rvy * ny;
+
+                        if (velAlongNormal < 0) {
+                            const restitution = 1.0; // Elastic collision
+                            const impulseMag = -(1 + restitution) * velAlongNormal / (1 / b.mass + 1 / astro.mass);
+
+                            const impulseX = impulseMag * nx;
+                            const impulseY = impulseMag * ny;
+
+                            b.vx -= impulseX / b.mass;
+                            b.vy -= impulseY / b.mass;
+                            astro.vx += impulseX / astro.mass;
+                            astro.vy += impulseY / astro.mass;
                         }
                     }
                 }
@@ -477,13 +629,26 @@
             if (newBallsToSpawn.length > 0) {
                 balls.push(...newBallsToSpawn);
             }
+
+            // 5. Update Explosion Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vx *= 0.97;
+                p.vy *= 0.97;
+                p.life -= p.decay;
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
         }
 
         function draw() {
             ctx.fillStyle = '#000000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Draw Asteroids (Half size)
+            // 1. Draw Asteroids
             ctx.strokeStyle = '#aaaaaa';
             ctx.fillStyle = '#1c1c1c';
             ctx.lineWidth = 1.5;
@@ -511,11 +676,49 @@
                 ctx.restore();
             }
 
-            // 2. Draw Scattered Planets
+            // 2. Draw Astronauts
+            for (const astro of astronauts) {
+                ctx.save();
+                ctx.translate(astro.x, astro.y);
+                ctx.rotate(astro.rotAngle);
+
+                const r = astro.radius;
+
+                // Backpack
+                ctx.fillStyle = '#555555';
+                ctx.fillRect(-r * 0.9, -r * 0.7, r * 0.4, r * 1.4);
+
+                // Body Suit
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(0, r * 0.2, r * 0.65, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Helmet
+                ctx.beginPath();
+                ctx.arc(0, -r * 0.3, r * 0.65, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Visor
+                ctx.beginPath();
+                ctx.arc(r * 0.1, -r * 0.3, r * 0.45, -Math.PI * 0.4, Math.PI * 0.4);
+                ctx.fillStyle = '#00d2ff';
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 0.8;
+                ctx.stroke();
+
+                // Suit Chest Patch
+                ctx.fillStyle = '#ff3333';
+                ctx.fillRect(-r * 0.25, r * 0.1, r * 0.25, r * 0.2);
+
+                ctx.restore();
+            }
+
+            // 3. Draw Planets
             for (const key in PLANETS) {
                 const planet = PLANETS[key];
 
-                // Highlight circle for planet selected in dropdown
                 if (key === highlightedPlanetKey) {
                     ctx.beginPath();
                     ctx.arc(planet.x, planet.y, planet.radius + 6, 0, Math.PI * 2);
@@ -526,7 +729,6 @@
                     ctx.setLineDash([]);
                 }
 
-                // Render Saturn's Ring Accent
                 if (key === 'saturn') {
                     ctx.beginPath();
                     ctx.ellipse(planet.x, planet.y, planet.radius * 1.8, planet.radius * 0.6, Math.PI / 6, 0, Math.PI * 2);
@@ -535,20 +737,18 @@
                     ctx.stroke();
                 }
 
-                // Main Planet Body
                 ctx.beginPath();
                 ctx.arc(planet.x, planet.y, planet.radius, 0, Math.PI * 2);
                 ctx.fillStyle = planet.color;
                 ctx.fill();
 
-                // Planet Name Label
                 ctx.fillStyle = '#888888';
                 ctx.font = '10px "Courier New", monospace';
                 ctx.textAlign = 'center';
                 ctx.fillText(planet.name.toUpperCase(), planet.x, planet.y + planet.radius + 12);
             }
 
-            // 3. Draw Rockets & Trails
+            // 4. Draw Rockets & Trails
             for (const b of balls) {
                 if (b.trail.length > 1) {
                     ctx.beginPath();
@@ -565,6 +765,24 @@
                 ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
                 ctx.fillStyle = '#ffffff';
                 ctx.fill();
+            }
+
+            // 5. Draw Sparkly Explosion Particles
+            for (const p of particles) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, p.life);
+                ctx.fillStyle = p.color;
+
+                if (p.sparkle) {
+                    const s = p.size;
+                    ctx.fillRect(p.x - s, p.y - 1, s * 2, 2);
+                    ctx.fillRect(p.x - 1, p.y - s, 2, s * 2);
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
             }
         }
 
