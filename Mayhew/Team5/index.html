@@ -98,6 +98,7 @@
             cursor: crosshair;
             width: 100%;
             height: 100%;
+            touch-action: none;
         }
 
         .instructions {
@@ -114,10 +115,10 @@
     <div id="header">
         <h1>Gravity Simulation</h1>
         
-        <!-- Ball Speed Slider Control -->
+        <!-- Ball Speed Multiplier Control -->
         <div class="control-group">
-            <label for="speedSlider">BALL SPEED: <span id="speedValue">5</span></label>
-            <input type="range" id="speedSlider" min="1" max="20" value="5" step="1">
+            <label for="speedSlider">LAUNCH POWER: <span id="speedValue">5</span>x</label>
+            <input type="range" id="speedSlider" min="1" max="15" value="5" step="1">
         </div>
 
         <button class="btn-reset" onclick="resetSimulation()">Reset</button>
@@ -129,7 +130,7 @@
     </div>
 
     <div class="instructions">
-        Click anywhere on the canvas to launch a ball (1s cooldown).
+        Click/Touch and pull back to aim & launch a ball (1s cooldown). Bounce off floating astronauts!
     </div>
 
     <script>
@@ -140,19 +141,26 @@
 
         // SIMULATION CONSTANTS
         const GRAVITY_CONSTANT = 1800;    // Strength of gravitational pull (G)
-        const FIXED_LAUNCH_ANGLE = 90;     // Fixed direction in degrees (90° = straight right)
         const TRAIL_LENGTH = 300;         // Number of historic trail points stored
         const SOFTENING_FACTOR = 400;     // Prevents infinite velocity near center
         const COOLDOWN_TIME_MS = 1000;    // 1-second spam click cooldown
         const BALL_LIFESPAN_MS = 10000;   // 10 seconds before explosion
+        const BALL_RADIUS = 4;
+        const ASTRONAUT_RADIUS = BALL_RADIUS * 2; // Twice the size of the ball (8px)
 
         // STATE VARIABLES
         let balls = [];
         let particles = [];
         let stars = [];
         let planets = [];
+        let astronauts = [];
         let lastLaunchTime = 0;
-        let launchSpeed = parseFloat(speedSlider.value);
+        let launchMultiplier = parseFloat(speedSlider.value);
+
+        // Slingshot Drag State
+        let isDragging = false;
+        let dragStart = { x: 0, y: 0 };
+        let dragCurrent = { x: 0, y: 0 };
 
         // Central Gravity Node Definition
         const centralNode = {
@@ -163,11 +171,11 @@
 
         // Speed Slider Event Listener
         speedSlider.addEventListener('input', (e) => {
-            launchSpeed = parseFloat(e.target.value);
-            speedValueDisplay.textContent = launchSpeed;
+            launchMultiplier = parseFloat(e.target.value);
+            speedValueDisplay.textContent = launchMultiplier;
         });
 
-        // Generate Random Starfield and Planets on Page Load
+        // Generate Starfield, Planets, and Astronauts
         function initSpaceBackground() {
             // Generate Stars
             stars = [];
@@ -181,9 +189,9 @@
                 });
             }
 
-            // Generate Planets in Random Locations
+            // Generate Planets
             planets = [];
-            const planetCount = Math.floor(Math.random() * 3) + 4; // 4 to 6 planets
+            const planetCount = Math.floor(Math.random() * 3) + 4;
             const planetColors = [
                 '#4a90e2', '#e67e22', '#9b59b6', '#2ecc71', '#f1c40f', '#e74c3c', '#1abc9c'
             ];
@@ -196,6 +204,32 @@
                     color: planetColors[Math.floor(Math.random() * planetColors.length)],
                     hasRing: Math.random() > 0.5,
                     ringTilt: (Math.random() * 0.5 + 0.2) * Math.PI
+                });
+            }
+
+            // Initialize Floating Astronauts
+            initAstronauts();
+        }
+
+        function initAstronauts() {
+            astronauts = [];
+            const count = 5;
+            for (let i = 0; i < count; i++) {
+                // Place away from center to avoid immediate absorption
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 150 + Math.random() * 200;
+                const x = (canvas.width || 800) / 2 + Math.cos(angle) * distance;
+                const y = (canvas.height || 600) / 2 + Math.sin(angle) * distance;
+
+                astronauts.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 1.5,
+                    vy: (Math.random() - 0.5) * 1.5,
+                    radius: ASTRONAUT_RADIUS,
+                    mass: 4, // Heavier mass than the ball (mass ratio = 4:1)
+                    rotation: Math.random() * Math.PI * 2,
+                    vRot: (Math.random() - 0.5) * 0.02
                 });
             }
         }
@@ -212,35 +246,76 @@
 
         window.addEventListener('resize', resizeCanvas);
 
-        // Canvas Click Handler: Spam-click protected
-        canvas.addEventListener('click', (e) => {
+        // Helper to get Canvas Coordinates for Mouse & Touch Events
+        function getCanvasPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        // SLINGSHOT DRAG HANDLERS
+        function handlePointerDown(e) {
             const now = Date.now();
             if (now - lastLaunchTime < COOLDOWN_TIME_MS) {
-                return; // Block launches faster than 1x per second
+                return; // Block input if cooldown is active
             }
 
-            const rect = canvas.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const clickY = e.clientY - rect.top;
+            const pos = getCanvasPos(e);
+            isDragging = true;
+            dragStart = pos;
+            dragCurrent = pos;
+        }
 
-            launchBall(clickX, clickY);
-            lastLaunchTime = now;
-        });
+        function handlePointerMove(e) {
+            if (!isDragging) return;
+            dragCurrent = getCanvasPos(e);
+        }
 
-        function launchBall(x, y) {
-            const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
-            const vx = launchSpeed * Math.sin(rad);  
-            const vy = -launchSpeed * Math.cos(rad); 
+        function handlePointerUp() {
+            if (!isDragging) return;
 
-            // Overwrite existing array to strictly maintain a single ball on screen
+            const now = Date.now();
+            const dx = dragStart.x - dragCurrent.x; // Pull back vector gives opposite launch direction
+            const dy = dragStart.y - dragCurrent.y;
+            const distance = Math.hypot(dx, dy);
+
+            // Minimum drag distance requirement to fire
+            if (distance > 5 && (now - lastLaunchTime >= COOLDOWN_TIME_MS)) {
+                const sensitivity = 0.05 * (launchMultiplier / 5);
+                const vx = dx * sensitivity;
+                const vy = dy * sensitivity;
+
+                launchBall(dragStart.x, dragStart.y, vx, vy);
+                lastLaunchTime = now;
+            }
+
+            isDragging = false;
+        }
+
+        // Mouse Listeners
+        canvas.addEventListener('mousedown', handlePointerDown);
+        window.addEventListener('mousemove', handlePointerMove);
+        window.addEventListener('mouseup', handlePointerUp);
+
+        // Touch Screen Listeners (Chromebook compatibility)
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handlePointerDown(e); }, { passive: false });
+        window.addEventListener('touchmove', (e) => { handlePointerMove(e); });
+        window.addEventListener('touchend', (e) => { handlePointerUp(); });
+
+        function launchBall(x, y, vx, vy) {
             balls = [{
                 x: x,
                 y: y,
                 vx: vx,
                 vy: vy,
-                radius: 4,
-                trail: [], // Stores history of past {x, y} coordinates
-                launchTime: Date.now() // Track launch timestamp for 10s timer
+                radius: BALL_RADIUS,
+                mass: 1,
+                trail: [],
+                launchTime: Date.now()
             }];
         }
 
@@ -267,12 +342,68 @@
         function resetSimulation() {
             balls = [];
             particles = [];
+            initAstronauts();
+        }
+
+        // Newton 2D Elastic Collision Resolution
+        function resolveCollision(b1, b2) {
+            const dx = b2.x - b1.x;
+            const dy = b2.y - b1.y;
+            const dist = Math.hypot(dx, dy);
+            const minDist = b1.radius + b2.radius;
+
+            if (dist < minDist && dist > 0) {
+                // Collision Normal Vector
+                const nx = dx / dist;
+                const ny = dy / dist;
+
+                // Position Correction (Separation to avoid sticking)
+                const overlap = minDist - dist;
+                b1.x -= nx * overlap * 0.5;
+                b1.y -= ny * overlap * 0.5;
+                b2.x += nx * overlap * 0.5;
+                b2.y += ny * overlap * 0.5;
+
+                // Relative Velocity
+                const rvx = b1.vx - b2.vx;
+                const rvy = b1.vy - b2.vy;
+                const velAlongNormal = rvx * nx + rvy * ny;
+
+                // Do not resolve if objects are moving apart
+                if (velAlongNormal > 0) {
+                    const restitution = 0.9; // Bounciness coefficient
+                    const m1 = b1.mass || 1;
+                    const m2 = b2.mass || 4;
+
+                    // Newton's Third Law Impulse calculation
+                    const impulse = -(1 + restitution) * velAlongNormal / ((1 / m1) + (1 / m2));
+
+                    // Equal and opposite velocity change
+                    b1.vx += (impulse / m1) * nx;
+                    b1.vy += (impulse / m1) * ny;
+                    b2.vx -= (impulse / m2) * nx;
+                    b2.vy -= (impulse / m2) * ny;
+                }
+            }
         }
 
         function updatePhysics() {
             const now = Date.now();
 
-            // Update Ball Physics & Timers
+            // 1. Update Astronaut Physics
+            for (let a of astronauts) {
+                a.x += a.vx;
+                a.y += a.vy;
+                a.rotation += a.vRot;
+
+                // Screen Boundary Bounce for Astronauts
+                if (a.x - a.radius < 0) { a.x = a.radius; a.vx *= -1; }
+                if (a.x + a.radius > canvas.width) { a.x = canvas.width - a.radius; a.vx *= -1; }
+                if (a.y - a.radius < 0) { a.y = a.radius; a.vy *= -1; }
+                if (a.y + a.radius > canvas.height) { a.y = canvas.height - a.radius; a.vy *= -1; }
+            }
+
+            // 2. Update Ball Physics & Timers
             for (let i = balls.length - 1; i >= 0; i--) {
                 const b = balls[i];
 
@@ -303,18 +434,20 @@
                     continue;
                 }
 
-                // Inverse square law gravity acceleration
+                // Gravity acceleration (inverse square law)
                 const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
-
-                // Acceleration vector components
                 const ax = acceleration * (dx / dist);
                 const ay = acceleration * (dy / dist);
 
-                // Update velocity and position
                 b.vx += ax;
                 b.vy += ay;
                 b.x += b.vx;
                 b.y += b.vy;
+
+                // Check collision with all floating astronauts
+                for (let a of astronauts) {
+                    resolveCollision(b, a);
+                }
 
                 // Record position history for line trail
                 b.trail.push({ x: b.x, y: b.y });
@@ -323,12 +456,12 @@
                 }
             }
 
-            // Update Firework Particle Physics
+            // 3. Update Firework Particles
             for (let i = particles.length - 1; i >= 0; i--) {
                 const p = particles[i];
                 p.x += p.vx;
                 p.y += p.vy;
-                p.vx *= 0.98; // Air resistance dampening
+                p.vx *= 0.98;
                 p.vy *= 0.98;
                 p.alpha -= p.decay;
 
@@ -336,6 +469,66 @@
                     particles.splice(i, 1);
                 }
             }
+        }
+
+        function drawAstronaut(astro) {
+            ctx.save();
+            ctx.translate(astro.x, astro.y);
+            ctx.rotate(astro.rotation);
+
+            // Astronaut Body/Helmet (White circle, twice the size of the ball)
+            ctx.beginPath();
+            ctx.arc(0, 0, astro.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+            ctx.strokeStyle = '#cccccc';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Astronaut Visor (Dark cyan/blue oval)
+            ctx.beginPath();
+            ctx.ellipse(0, -1, astro.radius * 0.5, astro.radius * 0.35, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#00e5ff';
+            ctx.fill();
+
+            // Small Backpack detail
+            ctx.fillStyle = '#888888';
+            ctx.fillRect(-astro.radius - 2, -astro.radius * 0.5, 2, astro.radius);
+
+            ctx.restore();
+        }
+
+        function drawSlingshot() {
+            if (!isDragging) return;
+
+            const dx = dragStart.x - dragCurrent.x;
+            const dy = dragStart.y - dragCurrent.y;
+
+            // Draw Pull Line (Slingshot Elastic Band)
+            ctx.beginPath();
+            ctx.moveTo(dragStart.x, dragStart.y);
+            ctx.lineTo(dragCurrent.x, dragCurrent.y);
+            ctx.strokeStyle = '#ff0055';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw Aim Vector Line (Direction ball will launch)
+            const aimX = dragStart.x + dx;
+            const aimY = dragStart.y + dy;
+            ctx.beginPath();
+            ctx.moveTo(dragStart.x, dragStart.y);
+            ctx.lineTo(aimX, aimY);
+            ctx.strokeStyle = '#00e5ff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Anchor point highlight
+            ctx.beginPath();
+            ctx.arc(dragStart.x, dragStart.y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#00e5ff';
+            ctx.fill();
         }
 
         function draw() {
@@ -356,13 +549,11 @@
                 const px = planet.xRatio * canvas.width;
                 const py = planet.yRatio * canvas.height;
 
-                // Planet Body
                 ctx.beginPath();
                 ctx.arc(px, py, planet.radius, 0, Math.PI * 2);
                 ctx.fillStyle = planet.color;
                 ctx.fill();
 
-                // Optional Planet Ring
                 if (planet.hasRing) {
                     ctx.save();
                     ctx.beginPath();
@@ -374,21 +565,24 @@
                 }
             }
 
-            // 3. Draw Central Mass Node
+            // 3. Draw Floating Astronauts
+            for (const astro of astronauts) {
+                drawAstronaut(astro);
+            }
+
+            // 4. Draw Central Mass Node
             ctx.beginPath();
             ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
             ctx.fillStyle = '#ffffff';
             ctx.fill();
 
-            // Center mark on node
             ctx.beginPath();
             ctx.arc(centralNode.x, centralNode.y, 2, 0, Math.PI * 2);
             ctx.fillStyle = '#000000';
             ctx.fill();
 
-            // 4. Draw Ball & Trail
+            // 5. Draw Ball & Trail
             for (const b of balls) {
-                // Draw path line
                 if (b.trail.length > 1) {
                     ctx.beginPath();
                     ctx.moveTo(b.trail[0].x, b.trail[0].y);
@@ -400,14 +594,13 @@
                     ctx.stroke();
                 }
 
-                // Draw ball object
                 ctx.beginPath();
                 ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
                 ctx.fillStyle = '#ffffff';
                 ctx.fill();
             }
 
-            // 5. Draw Firework Particles
+            // 6. Draw Firework Particles
             for (const p of particles) {
                 ctx.save();
                 ctx.globalAlpha = Math.max(0, p.alpha);
@@ -417,6 +610,9 @@
                 ctx.fill();
                 ctx.restore();
             }
+
+            // 7. Draw Slingshot Guidance
+            drawSlingshot();
         }
 
         function animate() {

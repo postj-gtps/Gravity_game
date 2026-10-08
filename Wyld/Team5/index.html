@@ -31,7 +31,7 @@
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 12px;
       width: 100%;
       max-width: 1100px;
       margin-bottom: 12px;
@@ -44,6 +44,20 @@
       letter-spacing: 2px;
       text-transform: uppercase;
       font-weight: bold;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      letter-spacing: 1px;
+    }
+
+    input[type="range"] {
+      cursor: pointer;
+      accent-color: #ffffff;
+      width: 110px;
     }
 
     #ball-counter {
@@ -110,8 +124,15 @@
   <!-- Header Section -->
   <div id="header">
     <h1>Gravity Simulation</h1>
+    
+    <!-- Launch Speed Slider -->
+    <div class="control-group">
+      <label for="speed-slider">LAUNCH SPEED: <span id="speed-val">5</span></label>
+      <input type="range" id="speed-slider" min="1" max="20" value="5" oninput="updateLaunchSpeed(this.value)">
+    </div>
+
     <button id="bouncy-btn" class="btn-action" onclick="toggleBouncyWalls()">Bouncy Walls: OFF</button>
-    <div id="ball-counter">Balls: 0 / 20</div>
+    <div id="ball-counter">Beyblades: 0 / 20</div>
     <button class="btn-action" onclick="resetSimulation()">Reset</button>
   </div>
 
@@ -121,7 +142,7 @@
   </div>
 
   <div class="instructions">
-    Click or tap anywhere on the canvas to launch up to 20 balls.
+    Click or tap anywhere on the canvas to launch up to 20 Beyblades (1 launch per second limit).
   </div>
 
   <script>
@@ -129,19 +150,25 @@
     const ctx = canvas.getContext('2d');
     const ballCounterEl = document.getElementById('ball-counter');
     const bouncyBtnEl = document.getElementById('bouncy-btn');
+    const speedValEl = document.getElementById('speed-val');
 
     // SIMULATION CONSTANTS
-    const MAX_BALLS = 20; // Maximum active balls on screen
+    const MAX_BALLS = 20; // Maximum active Beyblades on screen
     const GRAVITY_CONSTANT = 1800; // Strength of gravitational pull (G)
-    const LAUNCH_VELOCITY = 5; // Fixed velocity on click
     const FIXED_LAUNCH_ANGLE = 90; // Fixed direction in degrees (90° = straight right)
     const TRAIL_LENGTH = 300; // Number of historic trail points stored
     const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
+    const SPAM_COOLDOWN_MS = 1000; // 1-second spam-click filter
+
+    // BEYBLADE PALETTE
+    const BEYBLADE_COLORS = ['#FF3366', '#33CCFF', '#FFCC00', '#33FF66', '#CC33FF', '#FF9900'];
 
     // STATE VARIABLES
     let balls = [];
     let particles = []; // Spark particles for explosion effects
     let bouncyWalls = false;
+    let launchVelocity = 5;
+    let lastLaunchTime = 0;
 
     // Central Gravity Node Definition (Pikachu Sun)
     const centralNode = {
@@ -163,6 +190,12 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
+    // Update Launch Speed from Slider
+    function updateLaunchSpeed(val) {
+      launchVelocity = parseFloat(val);
+      speedValEl.textContent = val;
+    }
+
     // Toggle Bouncy Walls Feature
     function toggleBouncyWalls() {
       bouncyWalls = !bouncyWalls;
@@ -175,7 +208,7 @@
       }
     }
 
-    // Event Handler for both Touch and Mouse clicks (optimized for Chromebooks)
+    // Event Handler for both Touch and Mouse clicks
     canvas.addEventListener('pointerdown', (e) => {
       const rect = canvas.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
@@ -185,11 +218,19 @@
     });
 
     function launchBall(x, y) {
-      const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
-      const vx = LAUNCH_VELOCITY * Math.sin(rad);
-      const vy = -LAUNCH_VELOCITY * Math.cos(rad);
+      const now = Date.now();
+      
+      // Spam-click filter (prevents adding more than 1x per second)
+      if (now - lastLaunchTime < SPAM_COOLDOWN_MS) {
+        return;
+      }
+      lastLaunchTime = now;
 
-      // Maintain up to 20 balls (removes oldest ball if limit is reached)
+      const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
+      const vx = launchVelocity * Math.sin(rad);
+      const vy = -launchVelocity * Math.cos(rad);
+
+      // Maintain up to 20 Beyblades (removes oldest if limit is reached)
       if (balls.length >= MAX_BALLS) {
         balls.shift();
       }
@@ -199,7 +240,11 @@
         y: y,
         vx: vx,
         vy: vy,
-        radius: 4,
+        radius: 12, // Scaled for detailed Beyblade graphic
+        angle: 0,
+        spinSpeed: (Math.random() * 0.15 + 0.15) * (Math.random() < 0.5 ? 1 : -1),
+        color: BEYBLADE_COLORS[Math.floor(Math.random() * BEYBLADE_COLORS.length)],
+        bladeCount: 4 + Math.floor(Math.random() * 3), // 4, 5, or 6 blades
         trail: [] // Stores history of past {x, y} coordinates
       });
     }
@@ -209,7 +254,7 @@
       particles = [];
     }
 
-    // Spawn particle explosion when balls collide
+    // Spawn particle explosion when Beyblades collide
     function createExplosion(x, y) {
       const numParticles = 16;
       const colors = ['#FFD700', '#FF5722', '#FF9800', '#FFFFFF', '#E91E63'];
@@ -230,9 +275,12 @@
     }
 
     function updatePhysics() {
-      // 1. Update Ball Positions & Gravity
+      // 1. Update Beyblade Positions & Gravity
       for (let i = balls.length - 1; i >= 0; i--) {
         const b = balls[i];
+
+        // Spin animation update
+        b.angle += b.spinSpeed;
 
         // Bouncy Walls vs Off-screen removal
         if (bouncyWalls) {
@@ -267,7 +315,7 @@
         const distSq = dx * dx + dy * dy;
         const dist = Math.sqrt(distSq);
 
-        // Absorption check: ball collides with central mass
+        // Absorption check: Beyblade collides with central mass
         if (dist < centralNode.radius + b.radius) {
           balls.splice(i, 1);
           continue;
@@ -293,7 +341,7 @@
         }
       }
 
-      // 2. Ball-to-Ball Collision Detection
+      // 2. Beyblade Collision Detection
       const toRemove = new Set();
       for (let i = 0; i < balls.length; i++) {
         for (let j = i + 1; j < balls.length; j++) {
@@ -311,7 +359,7 @@
         }
       }
 
-      // Remove colliding balls (descending order to maintain valid indices)
+      // Remove colliding Beyblades (descending order)
       const sortedIndices = Array.from(toRemove).sort((a, b) => b - a);
       for (const index of sortedIndices) {
         balls.splice(index, 1);
@@ -330,7 +378,7 @@
       }
     }
 
-    // Renders Pikachu at central gravity node coordinates
+    // Renders Pikachu at central gravity node
     function drawPikachu(cx, cy, r) {
       // 1. Pointy Ears
       ctx.beginPath();
@@ -424,9 +472,60 @@
       ctx.stroke();
     }
 
+    // Custom Beyblade Graphic Renderer
+    function drawBeyblade(b) {
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(b.angle);
+
+      const r = b.radius;
+
+      // 1. Spiked Outer Blade Ring
+      ctx.beginPath();
+      const numBlades = b.bladeCount;
+      for (let i = 0; i < numBlades * 2; i++) {
+        const a = (i * Math.PI) / numBlades;
+        const dist = (i % 2 === 0) ? r : r * 0.65;
+        const bx = Math.cos(a) * dist;
+        const by = Math.sin(a) * dist;
+        if (i === 0) ctx.moveTo(bx, by);
+        else ctx.lineTo(bx, by);
+      }
+      ctx.closePath();
+      ctx.fillStyle = b.color;
+      ctx.fill();
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // 2. Inner Metallic Ring
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#111111';
+      ctx.fill();
+      ctx.strokeStyle = b.color;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // 3. Center Face Bolt (Hexagon)
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI) / 3;
+        const hx = Math.cos(a) * (r * 0.28);
+        const hy = Math.sin(a) * (r * 0.28);
+        if (i === 0) ctx.moveTo(hx, hy);
+        else ctx.lineTo(hx, hy);
+      }
+      ctx.closePath();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fill();
+
+      ctx.restore();
+    }
+
     function draw() {
-      // Update ball counter display
-      ballCounterEl.textContent = `Balls: ${balls.length} / ${MAX_BALLS}`;
+      // Update counter display
+      ballCounterEl.textContent = `Beyblades: ${balls.length} / ${MAX_BALLS}`;
 
       // Clear canvas background
       ctx.fillStyle = '#000000';
@@ -435,7 +534,7 @@
       // 1. Draw Pikachu Central Sun Node
       drawPikachu(centralNode.x, centralNode.y, centralNode.radius);
 
-      // 2. Draw Balls & Trails
+      // 2. Draw Beyblades & Trails
       for (const b of balls) {
         // Draw path line
         if (b.trail.length > 1) {
@@ -444,16 +543,13 @@
           for (let t = 1; t < b.trail.length; t++) {
             ctx.lineTo(b.trail[t].x, b.trail[t].y);
           }
-          ctx.strokeStyle = '#ffffff';
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
           ctx.lineWidth = 1.2;
           ctx.stroke();
         }
 
-        // Draw ball object
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
+        // Draw spinning Beyblade object
+        drawBeyblade(b);
       }
 
       // 3. Draw Explosion Particles

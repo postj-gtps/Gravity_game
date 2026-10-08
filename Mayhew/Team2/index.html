@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gravity Physics Simulation</title>
+    <title>Gravity Physics Simulation - UFO Edition</title>
     <style>
         * {
             box-sizing: border-box;
@@ -118,7 +118,7 @@
     </div>
 
     <div class="instructions">
-        Click & drag to pull back like a slingshot to launch a ball (1s cooldown between launches).
+        Click & drag to pull back like a slingshot to launch a UFO (1s cooldown between launches).
     </div>
 
     <script>
@@ -137,6 +137,7 @@
         // STATE VARIABLES
         let balls = [];
         let particles = [];              // Firework particles array
+        let backgroundUfos = [];         // Background decorative UFOs
         let bouncyWalls = false;
         let lastLaunchTime = 0;
 
@@ -154,6 +155,28 @@
             radius: 16
         };
 
+        // Initialize Background UFOs with varied shapes and slow drifting movement
+        function initBackgroundUfos() {
+            backgroundUfos = [];
+            const count = 18;
+            const ufoTypes = ['saucer', 'triangle', 'cigar', 'diamond'];
+
+            for (let i = 0; i < count; i++) {
+                backgroundUfos.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    vx: (Math.random() - 0.5) * 0.4,
+                    vy: (Math.random() - 0.5) * 0.4,
+                    scale: 0.6 + Math.random() * 0.8,
+                    type: ufoTypes[i % ufoTypes.length],
+                    alpha: 0.25 + Math.random() * 0.25,
+                    pulse: Math.random() * Math.PI * 2,
+                    rotation: Math.random() * Math.PI * 2,
+                    rotSpeed: (Math.random() - 0.5) * 0.01
+                });
+            }
+        }
+
         function resizeCanvas() {
             const wrapper = document.getElementById('canvas-wrapper');
             canvas.width = wrapper.clientWidth;
@@ -162,6 +185,10 @@
             // Recenter gravity node dynamically
             centralNode.x = canvas.width / 2;
             centralNode.y = canvas.height / 2;
+
+            if (backgroundUfos.length === 0) {
+                initBackgroundUfos();
+            }
         }
 
         window.addEventListener('resize', resizeCanvas);
@@ -258,14 +285,14 @@
         }
 
         function launchBall(x, y, vx, vy) {
-            // Overwrite existing array to maintain a single ball on screen
+            // Overwrite existing array to maintain a single ball/UFO on screen
             balls = [{
                 x: x,
                 y: y,
                 vx: vx,
                 vy: vy,
-                radius: 5,
-                trail: [] // Stores history of past {x, y} coordinates
+                radius: 12, // Hitbox radius for central sun collision
+                trail: []   // Stores history of past {x, y} coordinates
             }];
         }
 
@@ -296,7 +323,21 @@
         }
 
         function updatePhysics() {
-            // 1. Update Balls
+            // 1. Update Background UFO Drift
+            for (const ufo of backgroundUfos) {
+                ufo.x += ufo.vx;
+                ufo.y += ufo.vy;
+                ufo.pulse += 0.04;
+                ufo.rotation += ufo.rotSpeed;
+
+                // Wrap background UFOs around screen edges
+                if (ufo.x < -30) ufo.x = canvas.width + 30;
+                if (ufo.x > canvas.width + 30) ufo.x = -30;
+                if (ufo.y < -30) ufo.y = canvas.height + 30;
+                if (ufo.y > canvas.height + 30) ufo.y = -30;
+            }
+
+            // 2. Update UFO Balls
             for (let i = balls.length - 1; i >= 0; i--) {
                 const b = balls[i];
 
@@ -333,7 +374,7 @@
                 const distSq = dx * dx + dy * dy;
                 const dist = Math.sqrt(distSq);
 
-                // Collision check: ball collides with central sun -> EXPLODE!
+                // Collision check: UFO collides with central sun -> EXPLODE!
                 if (dist < centralNode.radius + b.radius) {
                     createFireworkExplosion(b.x, b.y);
                     balls.splice(i, 1);
@@ -353,14 +394,14 @@
                 b.x += b.vx;
                 b.y += b.vy;
 
-                // Record position history for trail
+                // Record position history for alien face trail
                 b.trail.push({ x: b.x, y: b.y });
                 if (b.trail.length > TRAIL_LENGTH) {
                     b.trail.shift();
                 }
             }
 
-            // 2. Update Firework Particles
+            // 3. Update Firework Particles
             for (let i = particles.length - 1; i >= 0; i--) {
                 const p = particles[i];
                 p.x += p.vx;
@@ -375,7 +416,113 @@
             }
         }
 
-        // Helper to render vector green alien faces along the trajectory trail
+        // Draw various shaped UFOs (Saucer, Triangle, Cigar, Diamond)
+        function drawUfoShape(type, x, y, scale, angle, opacity, isMain = false) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle);
+            ctx.scale(scale, scale);
+            ctx.globalAlpha = opacity;
+
+            if (type === 'saucer') {
+                // Classic Flying Saucer
+                // Top Dome
+                ctx.beginPath();
+                ctx.arc(0, -3, 8, Math.PI, 0);
+                ctx.fillStyle = isMain ? 'rgba(0, 240, 255, 0.85)' : 'rgba(120, 200, 255, 0.6)';
+                ctx.fill();
+
+                // Main Disc
+                ctx.beginPath();
+                ctx.ellipse(0, 2, 18, 6, 0, 0, Math.PI * 2);
+                ctx.fillStyle = isMain ? '#c0c0c0' : '#8a9ea7';
+                ctx.fill();
+                ctx.strokeStyle = isMain ? '#00e5ff' : '#4a6572';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                // Bottom Thruster Base
+                ctx.beginPath();
+                ctx.ellipse(0, 5, 8, 3, 0, 0, Math.PI * 2);
+                ctx.fillStyle = '#00e5ff';
+                ctx.fill();
+
+                // Glowing Lights
+                const lights = [-12, -4, 4, 12];
+                lights.forEach((lx, idx) => {
+                    ctx.beginPath();
+                    ctx.arc(lx, 2, 1.8, 0, Math.PI * 2);
+                    ctx.fillStyle = (idx % 2 === 0) ? '#00ffff' : '#ff0055';
+                    ctx.fill();
+                });
+            } else if (type === 'triangle') {
+                // Triangular Delta UFO
+                ctx.beginPath();
+                ctx.moveTo(0, -14);
+                ctx.lineTo(14, 12);
+                ctx.lineTo(-14, 12);
+                ctx.closePath();
+                ctx.fillStyle = isMain ? '#2a2e3d' : '#1e222e';
+                ctx.fill();
+                ctx.strokeStyle = '#00b0ff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                // Glowing Central Core
+                ctx.beginPath();
+                ctx.arc(0, 2, 4, 0, Math.PI * 2);
+                ctx.fillStyle = '#00ffff';
+                ctx.fill();
+
+                // Corner Lights
+                const corners = [{x:0, y:-10}, {x:10, y:9}, {x:-10, y:9}];
+                corners.forEach(c => {
+                    ctx.beginPath();
+                    ctx.arc(c.x, c.y, 1.5, 0, Math.PI * 2);
+                    ctx.fillStyle = '#00e5ff';
+                    ctx.fill();
+                });
+            } else if (type === 'cigar') {
+                // Cigar / Cylindrical Probe
+                ctx.beginPath();
+                ctx.roundRect(-16, -5, 32, 10, 5);
+                ctx.fillStyle = '#4f5b66';
+                ctx.fill();
+                ctx.strokeStyle = '#80d8ff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                // Glowing Strip
+                ctx.beginPath();
+                ctx.rect(-10, -1.5, 20, 3);
+                ctx.fillStyle = '#00e5ff';
+                ctx.fill();
+            } else if (type === 'diamond') {
+                // Diamond Probe UFO
+                ctx.beginPath();
+                ctx.moveTo(0, -14);
+                ctx.lineTo(10, 0);
+                ctx.lineTo(0, 14);
+                ctx.lineTo(-10, 0);
+                ctx.closePath();
+                ctx.fillStyle = '#1c3144';
+                ctx.fill();
+                ctx.strokeStyle = '#00ffff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                // Ring around center
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 14, 4, 0, 0, Math.PI * 2);
+                ctx.strokeStyle = '#00e5ff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        // Render vector green alien faces along the trajectory trail
         function drawAlienFace(x, y, scale, opacity) {
             ctx.save();
             ctx.translate(x, y);
@@ -412,6 +559,13 @@
             ctx.restore();
         }
 
+        function drawBackgroundUfos() {
+            for (const ufo of backgroundUfos) {
+                const pulseAlpha = ufo.alpha + Math.sin(ufo.pulse) * 0.08;
+                drawUfoShape(ufo.type, ufo.x, ufo.y, ufo.scale, ufo.rotation, Math.max(0.1, pulseAlpha));
+            }
+        }
+
         function drawSlingshot() {
             if (!isDragging) return;
 
@@ -431,7 +585,7 @@
             ctx.beginPath();
             ctx.moveTo(dragStart.x, dragStart.y);
             ctx.lineTo(clampedX, clampedY);
-            ctx.strokeStyle = '#888888';
+            ctx.strokeStyle = '#00e5ff';
             ctx.lineWidth = 1.5;
             ctx.setLineDash([4, 4]);
             ctx.stroke();
@@ -448,16 +602,14 @@
             ctx.lineWidth = 2;
             ctx.stroke();
 
-            // Ball spawn point indicator
-            ctx.beginPath();
-            ctx.arc(dragStart.x, dragStart.y, 5, 0, Math.PI * 2);
-            ctx.fillStyle = '#ffffff';
-            ctx.fill();
+            // Preview UFO at launch origin position
+            const angle = Math.atan2(pullY, pullX);
+            drawUfoShape('saucer', dragStart.x, dragStart.y, 0.9, angle, 0.9, true);
 
             // Drag handle endpoint ring
             ctx.beginPath();
-            ctx.arc(clampedX, clampedY, 4, 0, Math.PI * 2);
-            ctx.strokeStyle = '#ffffff';
+            ctx.arc(clampedX, clampedY, 5, 0, Math.PI * 2);
+            ctx.strokeStyle = '#00e5ff';
             ctx.lineWidth = 1.5;
             ctx.stroke();
         }
@@ -467,7 +619,10 @@
             ctx.fillStyle = '#000000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Draw Central Mass Node (Styled as glowing Sun)
+            // 1. Draw Background UFOs of various shapes floating in deep space
+            drawBackgroundUfos();
+
+            // 2. Draw Central Mass Node (Styled as glowing Sun)
             ctx.shadowColor = '#FF8C00';
             ctx.shadowBlur = 18;
             ctx.beginPath();
@@ -482,7 +637,7 @@
             ctx.fillStyle = '#FF4500'; // Orange-Red Core
             ctx.fill();
 
-            // 2. Draw Firework Particles
+            // 3. Draw Firework Particles
             for (const p of particles) {
                 ctx.save();
                 ctx.globalAlpha = Math.max(0, p.alpha);
@@ -493,7 +648,7 @@
                 ctx.restore();
             }
 
-            // 3. Draw Ball & Green Alien Face Trail
+            // 4. Draw Active UFO Balls & Green Alien Face Trail
             for (const b of balls) {
                 // Render green alien faces along the orbit trail (spaced every 6 points for optimal Chromebook FPS)
                 const step = 6;
@@ -505,17 +660,17 @@
                     drawAlienFace(point.x, point.y, scale, opacity);
                 }
 
-                // Draw current launched ball
-                ctx.beginPath();
-                ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-                ctx.fillStyle = '#ffffff';
-                ctx.fill();
+                // Calculate UFO orientation angle based on movement vector
+                const angle = Math.atan2(b.vy, b.vx);
+
+                // Draw main UFO shape for the ball
+                drawUfoShape('saucer', b.x, b.y, 1.0, angle, 1.0, true);
             }
 
-            // 4. Draw Slingshot Visual Aiming Overlay
+            // 5. Draw Slingshot Visual Aiming Overlay
             drawSlingshot();
 
-            // 5. Draw Spam-click Cooldown Banner
+            // 6. Draw Spam-click Cooldown Banner
             if (cooldownMessage) {
                 ctx.fillStyle = '#ffffff';
                 ctx.font = '12px "Courier New", Courier, monospace';
