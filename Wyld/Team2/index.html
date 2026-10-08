@@ -203,6 +203,7 @@
     const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
     const RESTITUTION = 0.85; // Energy retained after wall bounce
     const LAUNCH_COOLDOWN_MS = 1000; // Spam-click filter (1s limit)
+    const MAX_FIREBALLS = 30; // Maximum allowed fireballs onscreen at once
 
     // STATE VARIABLES
     let balls = [];
@@ -350,9 +351,9 @@
         });
       }
 
-      // Safety cap on active balls in play for Chromebook performance
-      if (balls.length > 200) {
-        balls.splice(0, balls.length - 200);
+      // Hard cap of 30 active fireballs onscreen at a time
+      if (balls.length > MAX_FIREBALLS) {
+        balls.splice(0, balls.length - MAX_FIREBALLS);
       }
     }
 
