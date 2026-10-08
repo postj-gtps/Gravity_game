@@ -14,7 +14,7 @@
     }
 
     body {
-      background-color: #000000;
+      background-color: #020208;
       color: #ffffff;
       display: flex;
       flex-direction: column;
@@ -76,7 +76,6 @@
       text-align: center;
     }
 
-    /* Standardize focus outline across controls */
     select:focus, input[type="number"]:focus {
       background-color: #111111;
       border-color: #7de3e4;
@@ -112,13 +111,13 @@
     }
 
     canvas {
-      background-color: #000000;
+      background-color: #020208;
       border: 1px solid #ffffff;
       display: block;
       cursor: crosshair;
       width: 100%;
       height: 100%;
-      touch-action: none; /* Prevents touch scrolling on Chromebook touch screens */
+      touch-action: none;
     }
 
     .instructions {
@@ -169,9 +168,9 @@
     <canvas id="simCanvas"></canvas>
   </div>
 
-  <div id="info-bar">Selected: Earth | Surface Gravity Multiplier: 1.00x</div>
+  <div id="info-bar">Selected: Earth | Surface Gravity Multiplier: 1.00x | Active Planets: 0/30</div>
   <div class="instructions">
-    Tap or click anywhere on space to launch a planet. Use WASD keys to gently thrust!
+    Tap or click anywhere in space to launch a planet (1 per second max). Use WASD keys to thrust all planets!
   </div>
 
   <script>
@@ -196,13 +195,16 @@
     // SIMULATION CONSTANTS
     const BASE_GRAVITY_CONSTANT = 1800; // Base gravitational strength (G)
     const FIXED_LAUNCH_ANGLE = 90;      // Fixed launch direction in degrees (90° = Right)
-    const TRAIL_LENGTH = 300;            // Historic points stored for tail
+    const TRAIL_LENGTH = 300;           // Historic points stored for tail
     const SOFTENING_FACTOR = 400;       // Prevents infinite acceleration near center
     const THRUST_FORCE = 0.08;          // Gentle WASD thrust strength
+    const MAX_BALLS = 30;               // Maximum active planets allowed on screen
 
     // STATE VARIABLES
     let balls = [];
     let particles = [];
+    let stars = [];
+    let lastLaunchTime = 0;              // Spam-click rate limit timestamp
     const keys = {};
 
     // Central Gravity Mass Node Definition
@@ -212,6 +214,30 @@
       radius: 14
     };
 
+    // Alien UFO Object State
+    const ufo = {
+      x: 120,
+      y: 90,
+      vx: 1.2,
+      vy: 0.4,
+      hoverOffset: 0,
+      lightTimer: 0
+    };
+
+    function initStars() {
+      stars = [];
+      const numStars = 120;
+      for (let i = 0; i < numStars; i++) {
+        stars.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          radius: Math.random() * 1.5 + 0.5,
+          alpha: Math.random() * 0.8 + 0.2,
+          twinkleSpeed: Math.random() * 0.02 + 0.005
+        });
+      }
+    }
+
     function resizeCanvas() {
       const wrapper = document.getElementById('canvas-wrapper');
       canvas.width = wrapper.clientWidth;
@@ -220,6 +246,8 @@
       // Keep central gravity node centered
       centralNode.x = canvas.width / 2;
       centralNode.y = canvas.height / 2;
+
+      initStars();
     }
 
     window.addEventListener('resize', resizeCanvas);
@@ -245,22 +273,33 @@
 
     function updatePlanetInfo() {
       const selected = PLANET_DATA[planetSelect.value];
-      infoBar.textContent = `Selected: ${selected.name} | Surface Gravity Multiplier: ${selected.gravityFactor.toFixed(2)}x`;
+      infoBar.textContent = `Selected: ${selected.name} | Surface Gravity Multiplier: ${selected.gravityFactor.toFixed(2)}x | Active Planets: ${balls.length}/${MAX_BALLS}`;
       infoBar.style.color = selected.color;
     }
 
     function launchBall(x, y) {
-      const selected = PLANET_DATA[planetSelect.value];
+      const currentTime = Date.now();
       
-      // Read current launch speed set by user (defaults to 5 if empty or invalid)
+      // Spam-click rate limit filter: 1 launch per second (1000ms)
+      if (currentTime - lastLaunchTime < 1000) {
+        return;
+      }
+      lastLaunchTime = currentTime;
+
+      const selected = PLANET_DATA[planetSelect.value];
       const launchSpeed = parseFloat(speedInput.value) >= 0 ? parseFloat(speedInput.value) : 5;
 
       const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
       const vx = launchSpeed * Math.sin(rad);
       const vy = -launchSpeed * Math.cos(rad);
 
-      // Overwrite current ball with selected planet specs
-      balls = [{
+      // Enforce max 30 planets on screen (removes oldest if limit reached)
+      if (balls.length >= MAX_BALLS) {
+        balls.shift();
+      }
+
+      // Add new planet to array (supports multiple active planets)
+      balls.push({
         x: x,
         y: y,
         vx: vx,
@@ -271,7 +310,9 @@
         hasRings: selected.hasRings || false,
         name: selected.name,
         trail: []
-      }];
+      });
+
+      updatePlanetInfo();
     }
 
     function triggerExplosion(x, y, planetColor) {
@@ -299,10 +340,22 @@
     function resetSimulation() {
       balls = [];
       particles = [];
+      updatePlanetInfo();
     }
 
     function updatePhysics() {
-      // 1. Update active planet physics and thrust
+      // 1. Update Alien UFO Position & Flight Pattern
+      ufo.x += ufo.vx;
+      ufo.y += ufo.vy;
+      ufo.hoverOffset += 0.04;
+      ufo.lightTimer += 0.15;
+
+      if (ufo.x < 50 || ufo.x > canvas.width - 50) ufo.vx *= -1;
+      if (ufo.y < 30 || ufo.y > canvas.height * 0.4) ufo.vy *= -1;
+
+      // 2. Update active planets physics and thrust
+      let ballCountChanged = false;
+
       for (let i = balls.length - 1; i >= 0; i--) {
         const b = balls[i];
 
@@ -317,6 +370,7 @@
         if (b.x < -margin || b.x > canvas.width + margin || 
             b.y < -margin || b.y > canvas.height + margin) {
           balls.splice(i, 1);
+          ballCountChanged = true;
           continue;
         }
 
@@ -330,6 +384,7 @@
         if (dist < centralNode.radius + b.radius) {
           triggerExplosion(b.x, b.y, b.color);
           balls.splice(i, 1);
+          ballCountChanged = true;
           continue;
         }
 
@@ -354,7 +409,11 @@
         }
       }
 
-      // 2. Update explosion particles
+      if (ballCountChanged) {
+        updatePlanetInfo();
+      }
+
+      // 3. Update explosion particles
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         p.x += p.vx;
@@ -367,12 +426,88 @@
       }
     }
 
-    function draw() {
-      // Clear screen
+    function drawUFO() {
+      const floatY = ufo.y + Math.sin(ufo.hoverOffset) * 5;
+
+      ctx.save();
+
+      // Tractor Beam
+      const beamGrad = ctx.createLinearGradient(ufo.x, floatY + 4, ufo.x, floatY + 80);
+      beamGrad.addColorStop(0, 'rgba(57, 255, 20, 0.25)');
+      beamGrad.addColorStop(1, 'rgba(57, 255, 20, 0.0)');
+
+      ctx.beginPath();
+      ctx.moveTo(ufo.x - 10, floatY + 4);
+      ctx.lineTo(ufo.x + 10, floatY + 4);
+      ctx.lineTo(ufo.x + 30, floatY + 80);
+      ctx.lineTo(ufo.x - 30, floatY + 80);
+      ctx.closePath();
+      ctx.fillStyle = beamGrad;
+      ctx.fill();
+
+      // Glass Dome
+      ctx.beginPath();
+      ctx.arc(ufo.x, floatY - 2, 11, Math.PI, 0);
+      ctx.fillStyle = 'rgba(120, 230, 255, 0.75)';
+      ctx.fill();
+
+      // Alien Pilot
+      ctx.beginPath();
+      ctx.arc(ufo.x, floatY - 4, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#39ff14';
+      ctx.fill();
+
       ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.arc(ufo.x - 1.2, floatY - 4.5, 0.8, 0, Math.PI * 2);
+      ctx.arc(ufo.x + 1.2, floatY - 4.5, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Saucer Main Body
+      ctx.beginPath();
+      ctx.ellipse(ufo.x, floatY + 3, 24, 7, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#808e9b';
+      ctx.fill();
+      ctx.strokeStyle = '#d2dae2';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Flashing Hull Lights
+      const lightColors = ['#ff3838', '#39ff14', '#17c0eb', '#fff200'];
+      const numLights = 5;
+      for (let i = 0; i < numLights; i++) {
+        const lx = ufo.x - 16 + i * 8;
+        const ly = floatY + 4;
+        const colorIdx = Math.floor((ufo.lightTimer + i) % lightColors.length);
+
+        ctx.beginPath();
+        ctx.arc(lx, ly, 1.8, 0, Math.PI * 2);
+        ctx.fillStyle = lightColors[colorIdx];
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    function draw() {
+      // Clear screen with Deep Space Background
+      ctx.fillStyle = '#020208';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // 1. Draw Central Gravity Mass (Star / Sun)
+      // 1. Draw Twinkling Background Stars
+      for (const s of stars) {
+        s.alpha += Math.sin(Date.now() * s.twinkleSpeed) * 0.01;
+        const currentAlpha = Math.max(0.1, Math.min(0.9, s.alpha));
+        ctx.fillStyle = `rgba(255, 255, 255, ${currentAlpha})`;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 2. Draw Alien UFO
+      drawUFO();
+
+      // 3. Draw Central Gravity Mass (Star / Sun)
       ctx.beginPath();
       ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
       ctx.fillStyle = '#ffcc00';
@@ -385,9 +520,8 @@
       ctx.lineWidth = 3;
       ctx.stroke();
 
-      // 2. Draw Active Planet & Path
+      // 4. Draw Active Planets & Trails
       for (const b of balls) {
-        // Draw orbital path trail matching planet color
         if (b.trail.length > 1) {
           ctx.beginPath();
           ctx.moveTo(b.trail[0].x, b.trail[0].y);
@@ -399,7 +533,6 @@
           ctx.stroke();
         }
 
-        // Draw Saturn's Rings if selected
         if (b.hasRings) {
           ctx.beginPath();
           ctx.ellipse(b.x, b.y, b.radius * 1.8, b.radius * 0.6, Math.PI / 6, 0, Math.PI * 2);
@@ -408,14 +541,13 @@
           ctx.stroke();
         }
 
-        // Draw Planet Body
         ctx.beginPath();
         ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
         ctx.fillStyle = b.color;
         ctx.fill();
       }
 
-      // 3. Draw Explosion Particles
+      // 5. Draw Explosion Particles
       for (const p of particles) {
         ctx.save();
         ctx.globalAlpha = Math.max(0, p.alpha);
