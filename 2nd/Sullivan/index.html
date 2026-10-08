@@ -120,6 +120,7 @@
             cursor: crosshair;
             width: 100%;
             height: 100%;
+            touch-action: none; /* Prevents touch scrolling/gestures on Chromebook screens */
         }
 
         .instructions {
@@ -177,7 +178,7 @@
         const TRAIL_LENGTH = 150;         // Orbit trail length
         const SOFTENING_FACTOR = 400;     // Softening factor for gravity calculations
         const MAX_ROCKETS = 50;           // Maximum allowed rockets on screen
-        const COOLDOWN_MS = 1000;         // 1-second spam filter
+        const COOLDOWN_MS = 1000;         // 1-second spam filter baseline requirement
 
         // CELESTIAL OBJECT DEFINITIONS (Gravity scales with relative size)
         const CELESTIAL_BODY_DATA = {
@@ -268,20 +269,26 @@
             centralNode.color = data.color;
         }
 
-        // Canvas Click Handler with 1-second Spam Click Filter
-        canvas.addEventListener('click', (e) => {
+        // Unified Launch Handler with 1-second Spam-Click Filter
+        function attemptLaunch(clientX, clientY) {
             const now = Date.now();
             if (now - lastLaunchTime < COOLDOWN_MS) {
-                return; // Enforce 1x per second spam restriction
+                return; // Enforce strict 1x per second spam restriction
             }
 
             lastLaunchTime = now;
 
             const rect = canvas.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const clickY = e.clientY - rect.top;
+            const clickX = clientX - rect.left;
+            const clickY = clientY - rect.top;
 
             launchRocketBurst(clickX, clickY);
+        }
+
+        // Pointer event listener handles mouse clicks and touchscreen taps uniformly
+        canvas.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            attemptLaunch(e.clientX, e.clientY);
         });
 
         function launchRocketBurst(x, y) {

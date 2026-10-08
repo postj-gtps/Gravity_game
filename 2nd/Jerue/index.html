@@ -109,7 +109,7 @@
  </div>
 
  <div class="instructions">
-   Tap or click anywhere on the canvas to launch a fleet of 5 rocket ships!
+   Tap or click anywhere on the canvas to launch a fleet of 5 rocket ships! (1-second cooldown between launches)
  </div>
 
  <script>
@@ -122,11 +122,13 @@
  const FIXED_LAUNCH_ANGLE = 90; // Base direction in degrees (90° = straight right)
  const TRAIL_LENGTH = 300; // Number of historic trail points stored
  const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
+ const SPAM_COOLDOWN_MS = 1000; // Spam-click filter interval (1 second)
 
  // STATE VARIABLES
  let ships = [];
  let stars = [];
  let nebulas = [];
+ let lastLaunchTime = 0; // Timestamp for spam-click throttling
 
  // Central Gravity Node Definition (Yellow Sun)
  const centralNode = {
@@ -172,8 +174,14 @@
  window.addEventListener('resize', resizeCanvas);
  resizeCanvas();
 
- // Touch & Click Handler: Launch 5 ships in a 30-degree spread
+ // Touch & Click Handler: Launch 5 ships with 1-second spam filter throttle
  canvas.addEventListener('pointerdown', (e) => {
+   const currentTime = Date.now();
+   if (currentTime - lastLaunchTime < SPAM_COOLDOWN_MS) {
+     return; // Ignore clicks if within 1 second of previous click
+   }
+   lastLaunchTime = currentTime;
+
    const rect = canvas.getBoundingClientRect();
    const clickX = e.clientX - rect.left;
    const clickY = e.clientY - rect.top;
