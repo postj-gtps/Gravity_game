@@ -137,7 +137,7 @@
  const TRAIL_LENGTH = 300; // Number of historic trail points stored
  const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
  const MAX_SHIPS = 20; // Upper limit of active rocketships
- const LAUNCH_COOLDOWN_MS = 2000; // 2-second rate limit between launches
+ const LAUNCH_COOLDOWN_MS = 1000; // 1-second spam-click filter limit (max 1 launch per sec)
 
  // STATE VARIABLES
  let ships = [];
@@ -279,7 +279,7 @@
    }
  });
 
- // Touch & Click Handler with Cooldown
+ // Touch & Click Handler with Cooldown Filter (1x per second)
  canvas.addEventListener('pointerdown', (e) => {
    if (isPaused) return;
 
