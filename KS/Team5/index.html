@@ -71,10 +71,11 @@
       display: flex;
       align-items: center;
       gap: 12px;
+      flex-wrap: wrap;
     }
 
-    /* Dropdown Selector */
-    .select-wrapper {
+    /* Dropdown Selector & Slider */
+    .select-wrapper, .slider-wrapper {
       display: flex;
       align-items: center;
       gap: 6px;
@@ -100,6 +101,17 @@
     select:hover, select:focus {
       border-color: #ff9e00;
       box-shadow: 0 0 12px rgba(255, 158, 0, 0.6);
+    }
+
+    input[type=range] {
+      accent-color: #ffbe0b;
+      cursor: pointer;
+      width: 85px;
+    }
+
+    #bounceValue {
+      color: #ffbe0b;
+      min-width: 32px;
     }
 
     .btn-reset {
@@ -164,7 +176,7 @@
 
   <!-- Header Section -->
   <div id="header">
-    <h1><span>🚀</span> Gravity Simulation <span class="badge">v2.2 Solar System</span></h1>
+    <h1><span>🚀</span> Gravity Simulation <span class="badge">v2.3 Solar System</span></h1>
     
     <div class="controls-group">
       <div class="select-wrapper">
@@ -181,6 +193,13 @@
           <option value="neptune">Neptune 🔵</option>
         </select>
       </div>
+
+      <div class="slider-wrapper">
+        <label for="bounceSelect">Wall Bounce:</label>
+        <input type="range" id="bounceSelect" min="0" max="1" step="0.1" value="0.7">
+        <span id="bounceValue">70%</span>
+      </div>
+
       <button class="btn-reset" id="resetBtn">Reset</button>
     </div>
   </div>
@@ -199,6 +218,8 @@
     const ctx = canvas.getContext('2d');
     const resetBtn = document.getElementById('resetBtn');
     const bodySelect = document.getElementById('bodySelect');
+    const bounceSelect = document.getElementById('bounceSelect');
+    const bounceValue = document.getElementById('bounceValue');
 
     // BASELINE SIMULATION CONSTANTS
     const LAUNCH_VELOCITY = 5;
@@ -213,7 +234,9 @@
     let brightStars = [];
     let moons = [];
     let shootingStars = [];
+    let explosionParticles = [];
     let lastLaunchTime = 0; // Tracks spam click threshold
+    let wallBounciness = parseFloat(bounceSelect.value);
 
     // Central Gravity Node Definition
     const centralNode = {
@@ -231,7 +254,6 @@
         gravity: 9500,
         radius: 36,
         draw: (ctx, r) => {
-          // Multi-layer glowing corona
           const sunGlow = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, r * 2.5);
           sunGlow.addColorStop(0, '#ffffff');
           sunGlow.addColorStop(0.2, '#ffbe0b');
@@ -242,13 +264,11 @@
           ctx.arc(0, 0, r * 2.5, 0, Math.PI * 2);
           ctx.fill();
 
-          // Main Sun Core
           ctx.fillStyle = '#ffbe0b';
           ctx.beginPath();
           ctx.arc(0, 0, r, 0, Math.PI * 2);
           ctx.fill();
 
-          // Inner Hot Spot
           ctx.fillStyle = '#fff5a5';
           ctx.beginPath();
           ctx.arc(-r * 0.2, -r * 0.2, r * 0.5, 0, Math.PI * 2);
@@ -265,7 +285,6 @@
           ctx.arc(0, 0, r, 0, Math.PI * 2);
           ctx.fill();
 
-          // Craters
           ctx.fillStyle = '#737373';
           [
             { x: -r * 0.3, y: -r * 0.2, cr: r * 0.25 },
@@ -292,7 +311,6 @@
           ctx.arc(0, 0, r, 0, Math.PI * 2);
           ctx.fill();
 
-          // Atmospheric swirl overlay
           ctx.strokeStyle = 'rgba(255, 240, 200, 0.3)';
           ctx.lineWidth = 3;
           ctx.beginPath();
@@ -305,7 +323,6 @@
         gravity: 1800,
         radius: 18,
         draw: (ctx, r) => {
-          // Atmosphere Glow
           const atmo = ctx.createRadialGradient(0, 0, r, 0, 0, r * 1.4);
           atmo.addColorStop(0, 'rgba(72, 191, 227, 0.6)');
           atmo.addColorStop(1, 'rgba(72, 191, 227, 0)');
@@ -314,20 +331,17 @@
           ctx.arc(0, 0, r * 1.4, 0, Math.PI * 2);
           ctx.fill();
 
-          // Ocean Base
           ctx.fillStyle = '#1d3557';
           ctx.beginPath();
           ctx.arc(0, 0, r, 0, Math.PI * 2);
           ctx.fill();
 
-          // Green Landmasses
           ctx.fillStyle = '#2a9d8f';
           ctx.beginPath();
           ctx.arc(-r * 0.3, -r * 0.2, r * 0.45, 0, Math.PI * 2);
           ctx.arc(r * 0.3, r * 0.25, r * 0.4, 0, Math.PI * 2);
           ctx.fill();
 
-          // Swirling White Clouds
           ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
           ctx.beginPath();
           ctx.arc(-r * 0.1, r * 0.3, r * 0.25, 0, Math.PI * 2);
@@ -349,13 +363,11 @@
           ctx.arc(0, 0, r, 0, Math.PI * 2);
           ctx.fill();
 
-          // Dark Patch
           ctx.fillStyle = 'rgba(60, 10, 10, 0.4)';
           ctx.beginPath();
           ctx.arc(r * 0.1, r * 0.1, r * 0.4, 0, Math.PI * 2);
           ctx.fill();
 
-          // Polar Ice Cap
           ctx.fillStyle = '#f1faee';
           ctx.beginPath();
           ctx.ellipse(0, -r * 0.75, r * 0.4, r * 0.2, 0, 0, Math.PI * 2);
@@ -372,11 +384,9 @@
           ctx.arc(0, 0, r, 0, Math.PI * 2);
           ctx.clip();
 
-          // Base color
           ctx.fillStyle = '#e9c46a';
           ctx.fillRect(-r, -r, r * 2, r * 2);
 
-          // Horizontal Gas Bands
           const bandColors = ['#99582a', '#f4a261', '#6b2d5c', '#e9c46a', '#bc6c25', '#f4a261'];
           const bandHeight = (r * 2) / bandColors.length;
           bandColors.forEach((color, i) => {
@@ -384,7 +394,6 @@
             ctx.fillRect(-r, -r + i * bandHeight, r * 2, bandHeight * 0.85);
           });
 
-          // Great Red Spot
           ctx.fillStyle = '#a4133c';
           ctx.beginPath();
           ctx.ellipse(r * 0.3, r * 0.25, r * 0.32, r * 0.2, Math.PI * 0.05, 0, Math.PI * 2);
@@ -397,7 +406,6 @@
         gravity: 3200,
         radius: 24,
         draw: (ctx, r) => {
-          // Draw Back Portion of Rings
           ctx.save();
           ctx.rotate(-Math.PI / 8);
           ctx.strokeStyle = 'rgba(212, 163, 115, 0.7)';
@@ -413,7 +421,6 @@
           ctx.stroke();
           ctx.restore();
 
-          // Planet Body
           const sGrad = ctx.createLinearGradient(-r, -r, r, r);
           sGrad.addColorStop(0, '#faedcd');
           sGrad.addColorStop(0.5, '#d4a373');
@@ -423,7 +430,6 @@
           ctx.arc(0, 0, r, 0, Math.PI * 2);
           ctx.fill();
 
-          // Draw Front Portion of Rings
           ctx.save();
           ctx.rotate(-Math.PI / 8);
           ctx.strokeStyle = 'rgba(212, 163, 115, 0.85)';
@@ -445,14 +451,12 @@
         gravity: 2100,
         radius: 20,
         draw: (ctx, r) => {
-          // Faint Vertical Ring
           ctx.strokeStyle = 'rgba(180, 240, 255, 0.4)';
           ctx.lineWidth = 2;
           ctx.beginPath();
           ctx.ellipse(0, 0, r * 0.5, r * 1.8, Math.PI / 12, 0, Math.PI * 2);
           ctx.stroke();
 
-          // Smooth Ice Giant Sphere
           const uGrad = ctx.createRadialGradient(-r*0.3, -r*0.3, 2, 0, 0, r);
           uGrad.addColorStop(0, '#ccfffe');
           uGrad.addColorStop(0.6, '#70e4ef');
@@ -477,13 +481,11 @@
           ctx.arc(0, 0, r, 0, Math.PI * 2);
           ctx.fill();
 
-          // Dark Spot
           ctx.fillStyle = 'rgba(2, 62, 138, 0.6)';
           ctx.beginPath();
           ctx.ellipse(-r * 0.2, r * 0.2, r * 0.35, r * 0.2, -0.2, 0, Math.PI * 2);
           ctx.fill();
 
-          // Cloud Streak
           ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
           ctx.lineWidth = 1.5;
           ctx.beginPath();
@@ -595,6 +597,73 @@
       }
     }
 
+    // SPARKLY EXPLOSION EFFECT
+    function createSparklyExplosion(x, y, primaryColor) {
+      const particleCount = 35;
+      const colors = [primaryColor, '#ffffff', '#ffbe0b', '#ff0055', '#70e4ef', '#e4c1f9', '#ffbe0b'];
+
+      for (let i = 0; i < particleCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 5 + 1.5;
+        explosionParticles.push({
+          x: x,
+          y: y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          radius: Math.random() * 3 + 1.5,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          alpha: 1.0,
+          decay: Math.random() * 0.025 + 0.015,
+          isSparkle: Math.random() < 0.65,
+          rotation: Math.random() * Math.PI,
+          rotSpeed: (Math.random() - 0.5) * 0.2
+        });
+      }
+    }
+
+    function updateExplosions() {
+      for (let i = explosionParticles.length - 1; i >= 0; i--) {
+        const p = explosionParticles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.95;
+        p.vy *= 0.95;
+        p.alpha -= p.decay;
+        p.rotation += p.rotSpeed;
+
+        if (p.alpha <= 0) {
+          explosionParticles.splice(i, 1);
+        }
+      }
+    }
+
+    function drawExplosions() {
+      for (const p of explosionParticles) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, p.alpha);
+        ctx.fillStyle = p.color;
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rotation);
+
+        if (p.isSparkle) {
+          const sz = p.radius * 2.2;
+          ctx.beginPath();
+          ctx.moveTo(-sz, 0);
+          ctx.quadraticCurveTo(0, 0, 0, -sz);
+          ctx.quadraticCurveTo(0, 0, sz, 0);
+          ctx.quadraticCurveTo(0, 0, 0, sz);
+          ctx.quadraticCurveTo(0, 0, -sz, 0);
+          ctx.fill();
+        } else {
+          ctx.beginPath();
+          ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+    }
+
     function updateCentralBody(bodyKey) {
       const bData = CELESTIAL_BODIES[bodyKey];
       if (bData) {
@@ -638,6 +707,15 @@
       updateCentralBody(e.target.value);
     });
 
+    bounceSelect.addEventListener('input', (e) => {
+      wallBounciness = parseFloat(e.target.value);
+      if (wallBounciness === 0) {
+        bounceValue.textContent = '0 (Off)';
+      } else {
+        bounceValue.textContent = Math.round(wallBounciness * 100) + '%';
+      }
+    });
+
     resetBtn.addEventListener('click', () => {
       resetSimulation();
     });
@@ -659,35 +737,84 @@
 
     function resetSimulation() {
       rockets = [];
+      explosionParticles = [];
     }
 
     function updatePhysics() {
+      updateExplosions();
+
       for (let i = rockets.length - 1; i >= 0; i--) {
         const r = rockets[i];
 
-        const margin = 500;
-        if (r.x < -margin || r.x > canvas.width + margin ||
-            r.y < -margin || r.y > canvas.height + margin) {
+        // Wall Bounciness vs Passthrough
+        if (wallBounciness > 0) {
+          if (r.x - r.radius < 0) {
+            r.x = r.radius;
+            r.vx = -r.vx * wallBounciness;
+          } else if (r.x + r.radius > canvas.width) {
+            r.x = canvas.width - r.radius;
+            r.vx = -r.vx * wallBounciness;
+          }
+          if (r.y - r.radius < 0) {
+            r.y = r.radius;
+            r.vy = -r.vy * wallBounciness;
+          } else if (r.y + r.radius > canvas.height) {
+            r.y = canvas.height - r.radius;
+            r.vy = -r.vy * wallBounciness;
+          }
+        } else {
+          const margin = 500;
+          if (r.x < -margin || r.x > canvas.width + margin ||
+              r.y < -margin || r.y > canvas.height + margin) {
+            rockets.splice(i, 1);
+            continue;
+          }
+        }
+
+        let totalAx = 0;
+        let totalAy = 0;
+        let hitObject = false;
+
+        // 1. Central Body Collision & Gravity
+        const dxCenter = centralNode.x - r.x;
+        const dyCenter = centralNode.y - r.y;
+        const distSqCenter = dxCenter * dxCenter + dyCenter * dyCenter;
+        const distCenter = Math.sqrt(distSqCenter);
+
+        if (distCenter < centralNode.radius + r.radius) {
+          createSparklyExplosion(r.x, r.y, '#ffbe0b');
           rockets.splice(i, 1);
           continue;
         }
 
-        const dx = centralNode.x - r.x;
-        const dy = centralNode.y - r.y;
-        const distSq = dx * dx + dy * dy;
-        const dist = Math.sqrt(distSq);
+        const accelCenter = centralNode.gravity / (distSqCenter + SOFTENING_FACTOR);
+        totalAx += accelCenter * (dxCenter / distCenter);
+        totalAy += accelCenter * (dyCenter / distCenter);
 
-        if (dist < centralNode.radius + r.radius) {
-          rockets.splice(i, 1);
-          continue;
+        // 2. Moons Collision & Gravity (1/3 of selected center mass gravity)
+        const moonGravity = centralNode.gravity / 3;
+        for (const moon of moons) {
+          const dxMoon = moon.x - r.x;
+          const dyMoon = moon.y - r.y;
+          const distSqMoon = dxMoon * dxMoon + dyMoon * dyMoon;
+          const distMoon = Math.sqrt(distSqMoon);
+
+          if (distMoon < moon.radius + r.radius) {
+            createSparklyExplosion(r.x, r.y, moon.palette.body);
+            rockets.splice(i, 1);
+            hitObject = true;
+            break;
+          }
+
+          const accelMoon = moonGravity / (distSqMoon + SOFTENING_FACTOR);
+          totalAx += accelMoon * (dxMoon / distMoon);
+          totalAy += accelMoon * (dyMoon / distMoon);
         }
 
-        const acceleration = centralNode.gravity / (distSq + SOFTENING_FACTOR);
-        const ax = acceleration * (dx / dist);
-        const ay = acceleration * (dy / dist);
+        if (hitObject) continue;
 
-        r.vx += ax;
-        r.vy += ay;
+        r.vx += totalAx;
+        r.vy += totalAy;
         r.x += r.vx;
         r.y += r.vy;
 
@@ -840,7 +967,6 @@
 
     // DRAW ROCKET SHIP PROBE
     function drawRocketShip(r) {
-      // 1. Draw Trajectory Line
       if (r.trail.length > 1) {
         ctx.save();
         ctx.beginPath();
@@ -856,18 +982,15 @@
         ctx.restore();
       }
 
-      // 2. Draw Rocket Ship Centered and Rotated
       ctx.save();
       ctx.translate(r.x, r.y);
 
-      // Rotate rocket to align with velocity vector
       const angle = Math.atan2(r.vy, r.vx);
-      ctx.rotate(angle + Math.PI / 2); // Point top of rocket along trajectory
+      ctx.rotate(angle + Math.PI / 2);
 
       const w = 12;
       const h = 24;
 
-      // Flickering Engine Thruster Flame
       const flameH = 8 + Math.random() * 6;
       const flameGrad = ctx.createLinearGradient(0, h / 2, 0, h / 2 + flameH);
       flameGrad.addColorStop(0, '#ffbe0b');
@@ -882,7 +1005,6 @@
       ctx.closePath();
       ctx.fill();
 
-      // Rocket Side Fins
       ctx.fillStyle = '#ff0055';
       ctx.beginPath();
       ctx.moveTo(-w * 0.3, 0);
@@ -898,7 +1020,6 @@
       ctx.closePath();
       ctx.fill();
 
-      // Main Hull Body
       ctx.fillStyle = '#f8f9fa';
       ctx.beginPath();
       ctx.moveTo(-w * 0.35, h / 2 - 3);
@@ -909,7 +1030,6 @@
       ctx.closePath();
       ctx.fill();
 
-      // Rocket Nose Cone
       ctx.fillStyle = '#ff0055';
       ctx.beginPath();
       ctx.moveTo(-w * 0.35, -h * 0.1);
@@ -918,7 +1038,6 @@
       ctx.closePath();
       ctx.fill();
 
-      // Cockpit Porthole Window
       ctx.fillStyle = '#00f5d4';
       ctx.beginPath();
       ctx.arc(0, -h * 0.05, 3, 0, Math.PI * 2);
@@ -931,7 +1050,6 @@
     }
 
     function drawPhysicsObjects() {
-      // 1. Central Gravity Mass (Selected Planet / Sun)
       ctx.save();
       ctx.translate(centralNode.x, centralNode.y);
 
@@ -942,10 +1060,11 @@
 
       ctx.restore();
 
-      // 2. Rocket Ships
       for (const r of rockets) {
         drawRocketShip(r);
       }
+
+      drawExplosions();
     }
 
     function draw() {

@@ -78,7 +78,7 @@
 
  input[type="range"] {
    accent-color: #ffd700;
-   width: 100px;
+   width: 90px;
  }
 
  .btn-reset {
@@ -153,9 +153,15 @@
      </div>
 
      <div class="control-item">
-       <label for="speedSlider">Launch Speed:</label>
+       <label for="speedSlider">Speed:</label>
        <input type="range" id="speedSlider" min="1" max="15" value="5" step="0.5" oninput="updateLaunchSpeed(this.value)">
        <span id="speedValue">5</span>
+     </div>
+
+     <div class="control-item">
+       <label for="shipCountSlider">Ships/Launch:</label>
+       <input type="range" id="shipCountSlider" min="1" max="10" value="5" step="1" oninput="updateShipCount(this.value)">
+       <span id="shipCountValue">5</span>
      </div>
 
      <button class="btn-reset" onclick="resetSimulation()">Reset</button>
@@ -168,7 +174,7 @@
  </div>
 
  <div class="instructions">
-   Tap or click anywhere to launch rockets! (1 launch per sec max | Max 20 ships)
+   Tap or click anywhere to launch rockets! (1 launch per sec max | Max 30 ships)
  </div>
 
  <script>
@@ -190,11 +196,12 @@
 
  // STATE VARIABLES
  let currentLaunchSpeed = 5;
+ let currentShipCount = 5;
  let gravityConstant = CENTRAL_BODIES.sun.gravity;
  const FIXED_LAUNCH_ANGLE = 90; // Base direction in degrees (90° = straight right)
  const TRAIL_LENGTH = 300; // Number of historic trail points stored
  const SOFTENING_FACTOR = 400; // Prevents infinite velocity near center
- const MAX_SHIPS = 20; // Upper limit of active rocketships
+ const MAX_SHIPS = 30; // Upper limit of active rocketships
  const LAUNCH_COOLDOWN_MS = 1000; // 1 second spam-click prevention filter
 
  let lastLaunchTime = 0;
@@ -204,6 +211,8 @@
  let stars = [];
  let nebulas = [];
  let planets = [];
+ let galaxyParticles = [];
+ let galaxyRotation = 0;
 
  // Central Gravity Node Definition
  const centralNode = {
@@ -228,6 +237,44 @@
  function updateLaunchSpeed(val) {
    currentLaunchSpeed = parseFloat(val);
    document.getElementById('speedValue').innerText = currentLaunchSpeed;
+ }
+
+ function updateShipCount(val) {
+   currentShipCount = parseInt(val, 10);
+   document.getElementById('shipCountValue').innerText = currentShipCount;
+ }
+
+ function generateSpiralGalaxy() {
+   galaxyParticles = [];
+   const particleCount = 1000;
+   const arms = 2;
+   const armSpread = 0.5;
+   const maxRadius = Math.max(canvas.width, canvas.height) * 0.4;
+
+   for (let i = 0; i < particleCount; i++) {
+     const distance = Math.pow(Math.random(), 1.8) * maxRadius;
+     const armOffset = (i % arms) * ((2 * Math.PI) / arms);
+     const spiralAngle = distance * 0.015;
+     const offsetAngle = (Math.random() - 0.5) * armSpread;
+     const totalAngle = armOffset + spiralAngle + offsetAngle;
+
+     let color;
+     if (distance < maxRadius * 0.2) {
+       color = '#fff6d5';
+     } else if (distance < maxRadius * 0.5) {
+       color = Math.random() > 0.4 ? '#a0c8ff' : '#e2b0ff';
+     } else {
+       color = Math.random() > 0.5 ? '#64b5f6' : '#ba68c8';
+     }
+
+     galaxyParticles.push({
+       dist: distance,
+       angle: totalAngle,
+       size: Math.random() * 1.6 + 0.4,
+       alpha: Math.random() * 0.7 + 0.3,
+       color: color
+     });
+   }
  }
 
  function generateSpaceBackground() {
@@ -309,6 +356,7 @@
    centralNode.y = canvas.height / 2;
 
    generateSpaceBackground();
+   generateSpiralGalaxy();
    generatePlanets();
  }
 
@@ -331,15 +379,15 @@
  });
 
  function launchShips(x, y) {
-   const shipCount = 5;
-   const totalSpreadDeg = 30;
+   const shipCount = currentShipCount;
+   const totalSpreadDeg = shipCount > 1 ? 30 : 0;
    const startAngle = FIXED_LAUNCH_ANGLE - (totalSpreadDeg / 2); 
-   const angleStep = totalSpreadDeg / (shipCount - 1); 
+   const angleStep = shipCount > 1 ? totalSpreadDeg / (shipCount - 1) : 0; 
 
-   const colors = ['#00e5ff', '#ff3366', '#76ff03', '#ffea00', '#d500f9'];
+   const colors = ['#00e5ff', '#ff3366', '#76ff03', '#ffea00', '#d500f9', '#ff9100', '#00e676', '#e040fb', '#18ffff', '#ffd600'];
 
    for (let i = 0; i < shipCount; i++) {
-     const currentAngleDeg = startAngle + (i * angleStep);
+     const currentAngleDeg = shipCount > 1 ? startAngle + (i * angleStep) : FIXED_LAUNCH_ANGLE;
      const rad = (currentAngleDeg * Math.PI) / 180;
      const vx = currentLaunchSpeed * Math.sin(rad);
      const vy = -currentLaunchSpeed * Math.cos(rad);
@@ -424,6 +472,44 @@
    }
  }
 
+ function drawSpiralGalaxy() {
+   const cx = canvas.width / 2;
+   const cy = canvas.height / 2;
+
+   ctx.save();
+   ctx.translate(cx, cy);
+
+   // Core bright galactic glow
+   const coreGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(canvas.width, canvas.height) * 0.22);
+   coreGlow.addColorStop(0, 'rgba(255, 240, 200, 0.35)');
+   coreGlow.addColorStop(0.3, 'rgba(180, 100, 255, 0.15)');
+   coreGlow.addColorStop(0.7, 'rgba(60, 120, 220, 0.08)');
+   coreGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+   ctx.fillStyle = coreGlow;
+   ctx.beginPath();
+   ctx.arc(0, 0, Math.max(canvas.width, canvas.height) * 0.22, 0, Math.PI * 2);
+   ctx.fill();
+
+   // Rotate spiral galaxy slowly over time
+   galaxyRotation += 0.0003;
+
+   // Render arms and dust particles
+   for (const p of galaxyParticles) {
+     const currentAngle = p.angle + galaxyRotation;
+     const x = Math.cos(currentAngle) * p.dist;
+     const y = Math.sin(currentAngle) * p.dist;
+
+     ctx.globalAlpha = p.alpha;
+     ctx.fillStyle = p.color;
+     ctx.beginPath();
+     ctx.arc(x, y, p.size, 0, Math.PI * 2);
+     ctx.fill();
+   }
+
+   ctx.restore();
+ }
+
  function drawBackground() {
    ctx.fillStyle = '#050512';
    ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -445,6 +531,8 @@
      ctx.fill();
      ctx.restore();
    }
+
+   drawSpiralGalaxy();
  }
 
  function drawCentralObject() {
