@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gravity Physics Simulator</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            margin: 0;
+            padding: 0;
+            font-family: 'Courier New', Courier, monospace, sans-serif;
+        }
+
+        body {
+            background-color: #050212;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            height: 100vh;
+            overflow: hidden;
+            padding: 16px;
+        }
+
+        /* Top Header Bar */
+        #header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 1100px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #444466;
+        }
+
+        h1 {
+            font-size: 18px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: bold;
+            color: #70a1ff;
+            text-shadow: 0 0 8px rgba(112, 161, 255, 0.6);
+        }
+
+        .controls-top {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn-reset {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            border: 1px solid #70a1ff;
+            padding: 6px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-radius: 4px;
+            transition: all 0.15s ease-in-out;
+        }
+
+        .btn-reset:hover {
+            background: #70a1ff;
+            color: #000000;
+            box-shadow: 0 0 10px #70a1ff;
+        }
+
+        .hud-stat {
+            font-size: 13px;
+            color: #a4b0be;
+            background: rgba(0,0,0,0.4);
+            padding: 4px 10px;
+            border-radius: 4px;
+            border: 1px solid #333355;
+        }
+
+        /* Main Canvas Container */
+        #canvas-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 1100px;
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(112, 161, 255, 0.2);
+            border: 1px solid #333366;
+        }
+
+        canvas {
+            background-color: #03010a;
+            display: block;
+            cursor: crosshair;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .instructions {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #a4b0be;
+            text-align: center;
+            display: flex;
+            gap: 16px;
+        }
+
+        .highlight {
+            color: #eccc68;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Section -->
+    <div id="header">
+        <h1>🌌 Gravity Simulation</h1>
+        <div class="controls-top">
+            <span class="hud-stat" id="planetCountHUD">Planets: 0 / 30</span>
+            <span class="hud-stat" id="zoomHUD">Zoom: 100%</span>
+            <button class="btn-reset" onclick="resetSimulation()">Reset</button>
+        </div>
+    </div>
+
+    <!-- Canvas Container -->
+    <div id="canvas-wrapper">
+        <canvas id="simCanvas"></canvas>
+    </div>
+
+    <div class="instructions">
+        <span>🖱️ Click to launch planet (<span id="cooldownHUD" class="highlight">Ready</span>)</span>
+        <span>⌨️ Use <span class="highlight">[+]</span> and <span class="highlight">[-]</span> to Zoom</span>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // SIMULATION CONSTANTS
+        const GRAVITY_CONSTANT = 1800;    // Strength of gravitational pull
+        const LAUNCH_VELOCITY = 5;         // Fixed velocity on launch
+        const FIXED_LAUNCH_ANGLE = 90;     // Direction in degrees (90° = straight right)
+        const TRAIL_LENGTH = 300;          // Max trail history
+        const SOFTENING_FACTOR = 400;      // Softening constant
+        const MAX_PLANETS = 30;            // Maximum planet cap
+        const LAUNCH_COOLDOWN_MS = 1000;   // 1 second spam-click filter
+
+        // STATE VARIABLES
+        let balls = [];
+        let zoomLevel = 1.0;
+        let lastLaunchTime = 0;
+        let trailHueOffset = 0;
+
+        // Central Gravity Node Definition
+        const centralNode = {
+            x: 0,
+            y: 0,
+            radius: 14
+        };
+
+        // BACKGROUND DECORATION DATA
+        let stars = [];
+        let backgroundPlanets = [];
+        let backgroundGalaxies = [];
+        let spaceship = {
+            x: -100,
+            y: 100,
+            vx: 1.5,
+            vy: 0.3,
+            angle: 0.2,
+            size: 18,
+            engineAnim: 0
+        };
+
+        const PALETTE = [
+            '#ff4757', '#ffa502', '#2ed573', '#1e90ff', 
+            '#3742fa', '#e84393', '#70a1ff', '#eccc68', 
+            '#00d2d3', '#ff6b81', '#a55eea', '#2bcbba'
+        ];
+
+        function initBackgroundElements() {
+            // Stars
+            stars = [];
+            const starCount = Math.floor((canvas.width * canvas.height) / 3000);
+            for (let i = 0; i < starCount; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    radius: Math.random() * 1.5 + 0.5,
+                    color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+                    alpha: Math.random(),
+                    twinkleSpeed: 0.01 + Math.random() * 0.03
+                });
+            }
+
+            // Decorative background galaxies
+            backgroundGalaxies = [
+                {
+                    x: canvas.width * 0.18,
+                    y: canvas.height * 0.25,
+                    radius: 70,
+                    angle: 0.4,
+                    color1: 'rgba(165, 94, 234, 0.25)',
+                    color2: 'rgba(30, 144, 255, 0.05)'
+                },
+                {
+                    x: canvas.width * 0.82,
+                    y: canvas.height * 0.75,
+                    radius: 90,
+                    angle: -0.6,
+                    color1: 'rgba(232, 67, 147, 0.25)',
+                    color2: 'rgba(255, 165, 2, 0.05)'
+                }
+            ];
+
+            // Decorative distant background planets
+            backgroundPlanets = [
+                {
+                    x: canvas.width * 0.85,
+                    y: canvas.height * 0.2,
+                    radius: 22,
+                    color: '#8854d0',
+                    ring: true,
+                    ringColor: 'rgba(165, 94, 234, 0.4)'
+                },
+                {
+                    x: canvas.width * 0.12,
+                    y: canvas.height * 0.8,
+                    radius: 16,
+                    color: '#fa8231',
+                    ring: false
+                }
+            ];
+        }
+
+        function resizeCanvas() {
+            const wrapper = document.getElementById('canvas-wrapper');
+            canvas.width = wrapper.clientWidth;
+            canvas.height = wrapper.clientHeight;
+            
+            centralNode.x = canvas.width / 2;
+            centralNode.y = canvas.height / 2;
+
+            initBackgroundElements();
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        // Convert canvas click coordinates to camera world coordinates
+        function canvasToWorldCoords(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const rawX = clientX - rect.left;
+            const rawY = clientY - rect.top;
+
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            const worldX = centerX + (rawX - centerX) / zoomLevel;
+            const worldY = centerY + (rawY - centerY) / zoomLevel;
+
+            return { x: worldX, y: worldY };
+        }
+
+        function handleInput(clientX, clientY) {
+            const now = Date.now();
+            if (now - lastLaunchTime < LAUNCH_COOLDOWN_MS) {
+                return; // Spam-click protection
+            }
+
+            if (balls.length >= MAX_PLANETS) {
+                // Limit reached: remove oldest planet to keep max 30
+                balls.shift();
+            }
+
+            const coords = canvasToWorldCoords(clientX, clientY);
+            launchBall(coords.x, coords.y);
+            lastLaunchTime = now;
+        }
+
+        canvas.addEventListener('click', (e) => {
+            handleInput(e.clientX, e.clientY);
+        });
+
+        // Touch support for Chromebook touchscreens
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (e.touches.length > 0) {
+                handleInput(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: false });
+
+        // Zoom Key Handlers (+ and - keys)
+        window.addEventListener('keydown', (e) => {
+            if (e.key === '+' || e.key === '=') {
+                zoomLevel = Math.min(zoomLevel + 0.15, 3.0);
+                updateHUD();
+            } else if (e.key === '-' || e.key === '_') {
+                zoomLevel = Math.max(zoomLevel - 0.15, 0.35);
+                updateHUD();
+            }
+        });
+
+        function launchBall(worldX, worldY) {
+            const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
+            const vx = LAUNCH_VELOCITY * Math.sin(rad);
+            const vy = -LAUNCH_VELOCITY * Math.cos(rad);
+
+            // Random vibrant planet color
+            const randomColor = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+
+            balls.push({
+                x: worldX,
+                y: worldY,
+                vx: vx,
+                vy: vy,
+                radius: 5,
+                color: randomColor,
+                trail: []
+            });
+
+            updateHUD();
+        }
+
+        function resetSimulation() {
+            balls = [];
+            zoomLevel = 1.0;
+            updateHUD();
+        }
+
+        function updatePhysics() {
+            // Update spaceship position
+            spaceship.x += spaceship.vx;
+            spaceship.y += spaceship.vy;
+            spaceship.engineAnim += 0.2;
+
+            if (spaceship.x > canvas.width + 100) {
+                spaceship.x = -100;
+                spaceship.y = Math.random() * (canvas.height * 0.6) + canvas.height * 0.2;
+            }
+
+            // Update planet physics
+            for (let i = balls.length - 1; i >= 0; i--) {
+                const b = balls[i];
+
+                const margin = 2000;
+                if (b.x < -margin || b.x > canvas.width + margin || 
+                    b.y < -margin || b.y > canvas.height + margin) {
+                    balls.splice(i, 1);
+                    updateHUD();
+                    continue;
+                }
+
+                const dx = centralNode.x - b.x;
+                const dy = centralNode.y - b.y;
+                const distSq = dx * dx + dy * dy;
+                const dist = Math.sqrt(distSq);
+
+                if (dist < centralNode.radius + b.radius) {
+                    balls.splice(i, 1);
+                    updateHUD();
+                    continue;
+                }
+
+                const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
+
+                const ax = acceleration * (dx / dist);
+                const ay = acceleration * (dy / dist);
+
+                b.vx += ax;
+                b.vy += ay;
+                b.x += b.vx;
+                b.y += b.vy;
+
+                b.trail.push({ x: b.x, y: b.y });
+                if (b.trail.length > TRAIL_LENGTH) {
+                    b.trail.shift();
+                }
+            }
+
+            // Animate rainbow trail offset
+            trailHueOffset = (trailHueOffset + 2) % 360;
+        }
+
+        function drawBackground() {
+            // Outer Space Dark Gradient
+            const bgGrad = ctx.createRadialGradient(
+                canvas.width / 2, canvas.height / 2, 100,
+                canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height)
+            );
+            bgGrad.addColorStop(0, '#0a051d');
+            bgGrad.addColorStop(1, '#020006');
+            ctx.fillStyle = bgGrad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Background Galaxies
+            for (const gal of backgroundGalaxies) {
+                ctx.save();
+                ctx.translate(gal.x, gal.y);
+                ctx.rotate(gal.angle);
+                const gGrad = ctx.createRadialGradient(0, 0, 5, 0, 0, gal.radius);
+                gGrad.addColorStop(0, gal.color1);
+                gGrad.addColorStop(0.7, gal.color2);
+                gGrad.addColorStop(1, 'transparent');
+                ctx.fillStyle = gGrad;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, gal.radius, gal.radius * 0.4, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // Draw Twinkling Stars
+            for (const star of stars) {
+                star.alpha += star.twinkleSpeed;
+                if (star.alpha > 1 || star.alpha < 0.2) star.twinkleSpeed = -star.twinkleSpeed;
+
+                ctx.save();
+                ctx.globalAlpha = Math.max(0.1, Math.min(1, star.alpha));
+                ctx.fillStyle = star.color;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // Draw Decorative Background Planets
+            for (const p of backgroundPlanets) {
+                ctx.save();
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (p.ring) {
+                    ctx.strokeStyle = p.ringColor;
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.ellipse(p.x, p.y, p.radius * 1.8, p.radius * 0.5, -0.3, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+
+            // Draw Animated Spaceship
+            drawSpaceship();
+        }
+
+        function drawSpaceship() {
+            ctx.save();
+            ctx.translate(spaceship.x, spaceship.y);
+            ctx.rotate(spaceship.angle);
+
+            // Engine Flame
+            const flameLen = 8 + Math.sin(spaceship.engineAnim) * 4;
+            ctx.fillStyle = '#ff4757';
+            ctx.beginPath();
+            ctx.moveTo(-10, -3);
+            ctx.lineTo(-10 - flameLen, 0);
+            ctx.lineTo(-10, 3);
+            ctx.closePath();
+            ctx.fill();
+
+            // Spaceship Hull
+            ctx.fillStyle = '#f1f2f6';
+            ctx.beginPath();
+            ctx.moveTo(12, 0);
+            ctx.lineTo(-8, -7);
+            ctx.lineTo(-5, 0);
+            ctx.lineTo(-8, 7);
+            ctx.closePath();
+            ctx.fill();
+
+            // Cockpit Canopy
+            ctx.fillStyle = '#70a1ff';
+            ctx.beginPath();
+            ctx.arc(2, 0, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function draw() {
+            drawBackground();
+
+            // Apply Camera Zoom Transformation around center
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.scale(zoomLevel, zoomLevel);
+            ctx.translate(-canvas.width / 2, -canvas.height / 2);
+
+            // 1. Draw Central Mass Node (Glow + Solid Core)
+            const nodeGlow = ctx.createRadialGradient(
+                centralNode.x, centralNode.y, 2,
+                centralNode.x, centralNode.y, centralNode.radius * 2.5
+            );
+            nodeGlow.addColorStop(0, '#ffffff');
+            nodeGlow.addColorStop(0.4, '#eccc68');
+            nodeGlow.addColorStop(1, 'transparent');
+
+            ctx.beginPath();
+            ctx.arc(centralNode.x, centralNode.y, centralNode.radius * 2.5, 0, Math.PI * 2);
+            ctx.fillStyle = nodeGlow;
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#fffa65';
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(centralNode.x, centralNode.y, 3, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+
+            // 2. Draw Planets & Rainbow Trails
+            for (const b of balls) {
+                // Rainbow Trail Line Segments
+                if (b.trail.length > 1) {
+                    for (let t = 1; t < b.trail.length; t++) {
+                        const p1 = b.trail[t - 1];
+                        const p2 = b.trail[t];
+
+                        const hue = (t * 3 + trailHueOffset) % 360;
+                        const alpha = t / b.trail.length;
+
+                        ctx.beginPath();
+                        ctx.moveTo(p1.x, p1.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.strokeStyle = `hsla(${hue}, 100%, 65%, ${alpha})`;
+                        ctx.lineWidth = 1.5 + (t / b.trail.length) * 1.5;
+                        ctx.stroke();
+                    }
+                }
+
+                // Draw Planet Body + Outer Glow
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.radius + 2, 0, Math.PI * 2);
+                ctx.fillStyle = b.color + '44'; // Translucent glow
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+                ctx.fillStyle = b.color;
+                ctx.fill();
+            }
+
+            ctx.restore();
+            updateCooldownUI();
+        }
+
+        function updateHUD() {
+            document.getElementById('planetCountHUD').innerText = `Planets: ${balls.length} / ${MAX_PLANETS}`;
+            document.getElementById('zoomHUD').innerText = `Zoom: ${Math.round(zoomLevel * 100)}%`;
+        }
+
+        function updateCooldownUI() {
+            const now = Date.now();
+            const elapsed = now - lastLaunchTime;
+            const elem = document.getElementById('cooldownHUD');
+
+            if (elapsed >= LAUNCH_COOLDOWN_MS) {
+                elem.innerText = 'Ready';
+                elem.style.color = '#2ed573';
+            } else {
+                const remaining = ((LAUNCH_COOLDOWN_MS - elapsed) / 1000).toFixed(1);
+                elem.innerText = `Wait ${remaining}s`;
+                elem.style.color = '#ff4757';
+            }
+        }
+
+        function animate() {
+            updatePhysics();
+            draw();
+            requestAnimationFrame(animate);
+        }
+
+        window.onload = function() {
+            resizeCanvas();
+            animate();
+        };
+    </script>
+</body>
+</html>
