@@ -188,8 +188,15 @@
         // GAME STATE
         let isGameOver = false;
         let startTime = 0;
+        let bonusSeconds = 0;
         let survivalSeconds = 0;
         let spawnTimer = null;
+
+        // PIZZA STATE
+        const pizza = { x: 0, y: 0, radius: 15 };
+
+        // TREES STATE
+        let trees = [];
 
         // STICKMAN PLAYER STATE
         const player = {
@@ -226,6 +233,55 @@
             }
         }
 
+        function generateTrees() {
+            trees = [];
+            const minDistance = 110; // Minimum distance from player spawn center
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            for (let i = 0; i < 4; i++) {
+                let tx, ty, dist;
+                let attempts = 0;
+                do {
+                    tx = 70 + Math.random() * (canvas.width - 140);
+                    ty = 80 + Math.random() * (canvas.height - 150);
+                    dist = Math.hypot(tx - centerX, ty - centerY);
+                    attempts++;
+                } while (dist < minDistance && attempts < 100);
+
+                trees.push({
+                    x: tx,
+                    y: ty,
+                    radius: 28 // Collision obstacle radius
+                });
+            }
+        }
+
+        function spawnPizza() {
+            let valid = false;
+            let px = 0;
+            let py = 0;
+            let attempts = 0;
+
+            while (!valid && attempts < 100) {
+                px = 50 + Math.random() * (canvas.width - 100);
+                py = 60 + Math.random() * (canvas.height - 110);
+                valid = true;
+
+                // Ensure pizza doesn't spawn inside a tree obstacle
+                for (const tree of trees) {
+                    if (Math.hypot(px - tree.x, py - tree.y) < tree.radius + 25) {
+                        valid = false;
+                        break;
+                    }
+                }
+                attempts++;
+            }
+
+            pizza.x = px;
+            pizza.y = py;
+        }
+
         function spawnButterfly() {
             if (isGameOver) return;
             const radius = 10;
@@ -248,9 +304,12 @@
             canvas.width = wrapper.clientWidth;
             canvas.height = wrapper.clientHeight;
             generateMeadowDecorations();
+            generateTrees();
             
             if (player.x === 0 && player.y === 0) {
                 resetSimulation();
+            } else {
+                spawnPizza();
             }
         }
 
@@ -291,10 +350,15 @@
             player.proneTimer = 0;
             player.invulnerableTimer = 0;
 
+            bonusSeconds = 0;
+            survivalSeconds = 0;
+
             butterflies = [];
             isGameOver = false;
             startTime = Date.now();
-            survivalSeconds = 0;
+
+            generateTrees();
+            spawnPizza();
 
             document.getElementById('game-over-modal').style.display = 'none';
             updateHUD();
@@ -316,8 +380,8 @@
         function updatePhysics(deltaTime) {
             if (isGameOver) return;
 
-            // Update Survival Score Time
-            survivalSeconds = Math.floor((Date.now() - startTime) / 1000);
+            // Update Survival Score Time (Including pizza bonus points)
+            survivalSeconds = Math.floor((Date.now() - startTime) / 1000) + bonusSeconds;
 
             // Update Prone & Invulnerability Timers
             if (player.proneTimer > 0) {
@@ -347,6 +411,19 @@
 
                 player.x += dx * player.speed;
                 player.y += dy * player.speed;
+
+                // Tree Obstacle Collision (Stickman slides around trees)
+                trees.forEach(tree => {
+                    const pdx = player.x - tree.x;
+                    const pdy = player.y - tree.y;
+                    const dist = Math.hypot(pdx, pdy);
+                    const minDist = tree.radius + 8;
+                    if (dist < minDist && dist > 0) {
+                        const overlap = minDist - dist;
+                        player.x += (pdx / dist) * overlap;
+                        player.y += (pdy / dist) * overlap;
+                    }
+                });
             }
 
             // Keep stickman inside canvas boundaries
@@ -368,6 +445,17 @@
 
             if (player.punchTimer > 0) {
                 player.punchTimer--;
+            }
+
+            // Pizza Pickup Detection
+            const pizzaDist = Math.hypot(player.x - pizza.x, (player.y - 15) - pizza.y);
+            if (pizzaDist < pizza.radius + 15) {
+                bonusSeconds += 50; // Add 50 seconds to score
+                if (player.hearts < player.maxHearts) {
+                    player.hearts++; // Gain 1 heart back
+                }
+                spawnPizza(); // Respawn pizza elsewhere
+                updateHUD();
             }
 
             // Update Butterflies Position & Bounce Off Walls
@@ -462,6 +550,77 @@
                 ctx.arc(f.x, f.y, f.radius * 0.4, 0, Math.PI * 2);
                 ctx.fill();
             });
+        }
+
+        function drawTree(tree) {
+            ctx.save();
+
+            // Tree Base Shadow
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.beginPath();
+            ctx.ellipse(tree.x, tree.y + 12, tree.radius, tree.radius * 0.4, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Trunk
+            ctx.fillStyle = '#5d4037';
+            ctx.fillRect(tree.x - 7, tree.y - 10, 14, 22);
+
+            // Foliage / Canopy Layers
+            ctx.fillStyle = '#1b5e20';
+            ctx.beginPath();
+            ctx.arc(tree.x, tree.y - 18, tree.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#2e7d32';
+            ctx.beginPath();
+            ctx.arc(tree.x - 5, tree.y - 22, tree.radius * 0.75, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#4caf50';
+            ctx.beginPath();
+            ctx.arc(tree.x + 4, tree.y - 24, tree.radius * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function drawPizza(p) {
+            ctx.save();
+            ctx.translate(p.x, p.y);
+
+            // Crust Back Curve
+            ctx.fillStyle = '#d7ccc8';
+            ctx.beginPath();
+            ctx.arc(0, -12, 12, Math.PI, 0, true);
+            ctx.fill();
+
+            // Slice Base
+            ctx.fillStyle = '#8d6e63';
+            ctx.beginPath();
+            ctx.moveTo(0, 12);
+            ctx.lineTo(-12, -12);
+            ctx.lineTo(12, -12);
+            ctx.closePath();
+            ctx.fill();
+
+            // Cheese Triangle
+            ctx.fillStyle = '#ffd54f';
+            ctx.beginPath();
+            ctx.moveTo(0, 8);
+            ctx.lineTo(-9, -10);
+            ctx.lineTo(9, -10);
+            ctx.closePath();
+            ctx.fill();
+
+            // Pepperoni Circles
+            ctx.fillStyle = '#e53935';
+            ctx.beginPath();
+            ctx.arc(-3, -3, 2.5, 0, Math.PI * 2);
+            ctx.arc(3, -1, 2.5, 0, Math.PI * 2);
+            ctx.arc(0, 4, 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
         }
 
         function drawButterfly(b) {
@@ -621,6 +780,12 @@
         function draw() {
             // Clear & Draw Meadow
             drawMeadow();
+
+            // Draw Trees
+            trees.forEach(drawTree);
+
+            // Draw Pizza
+            drawPizza(pizza);
 
             // Draw Butterflies
             butterflies.forEach(drawButterfly);
