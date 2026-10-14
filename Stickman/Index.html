@@ -175,7 +175,7 @@
     </div>
 
     <div class="instructions">
-        [WASD] Move &nbsp;|&nbsp; [SPACEBAR] Punch
+        [WASD] Move &nbsp;|&nbsp; [SPACEBAR] Swing Net
     </div>
 
     <script>
@@ -205,8 +205,8 @@
             speed: 4.5,
             facing: 1, // 1 = Right, -1 = Left
             walkFrame: 0,
-            punchTimer: 0,
-            punchDuration: 12,
+            swingTimer: 0,
+            swingDuration: 15,
             hearts: 10,
             maxHearts: 10,
             proneTimer: 0,       // Seconds remaining prone
@@ -235,7 +235,7 @@
 
         function generateTrees() {
             trees = [];
-            const minDistance = 110; // Minimum distance from player spawn center
+            const minDistance = 110;
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2;
 
@@ -252,7 +252,7 @@
                 trees.push({
                     x: tx,
                     y: ty,
-                    radius: 28 // Collision obstacle radius
+                    radius: 28
                 });
             }
         }
@@ -268,7 +268,6 @@
                 py = 60 + Math.random() * (canvas.height - 110);
                 valid = true;
 
-                // Ensure pizza doesn't spawn inside a tree obstacle
                 for (const tree of trees) {
                     if (Math.hypot(px - tree.x, py - tree.y) < tree.radius + 25) {
                         valid = false;
@@ -344,7 +343,7 @@
             player.x = canvas.width / 2;
             player.y = canvas.height / 2;
             player.facing = 1;
-            player.punchTimer = 0;
+            player.swingTimer = 0;
             player.walkFrame = 0;
             player.hearts = 10;
             player.proneTimer = 0;
@@ -363,15 +362,14 @@
             document.getElementById('game-over-modal').style.display = 'none';
             updateHUD();
 
-            // Clear existing interval & spawn 1 butterfly immediately
             if (spawnTimer) clearInterval(spawnTimer);
             spawnButterfly();
-            spawnTimer = setInterval(spawnButterfly, 3000); // 1 butterfly every 3 seconds
+            spawnTimer = setInterval(spawnButterfly, 3000);
         }
 
-        function triggerPunch() {
-            if (player.punchTimer === 0 && player.proneTimer <= 0) {
-                player.punchTimer = player.punchDuration;
+        function triggerSwing() {
+            if (player.swingTimer === 0 && player.proneTimer <= 0) {
+                player.swingTimer = player.swingDuration;
             }
         }
 
@@ -380,10 +378,8 @@
         function updatePhysics(deltaTime) {
             if (isGameOver) return;
 
-            // Update Survival Score Time (Including pizza bonus points)
             survivalSeconds = Math.floor((Date.now() - startTime) / 1000) + bonusSeconds;
 
-            // Update Prone & Invulnerability Timers
             if (player.proneTimer > 0) {
                 player.proneTimer -= deltaTime;
                 if (player.proneTimer < 0) player.proneTimer = 0;
@@ -394,7 +390,6 @@
                 if (player.invulnerableTimer < 0) player.invulnerableTimer = 0;
             }
 
-            // Movement Calculation (Only if NOT prone)
             let dx = 0;
             let dy = 0;
 
@@ -412,7 +407,6 @@
                 player.x += dx * player.speed;
                 player.y += dy * player.speed;
 
-                // Tree Obstacle Collision (Stickman slides around trees)
                 trees.forEach(tree => {
                     const pdx = player.x - tree.x;
                     const pdy = player.y - tree.y;
@@ -426,35 +420,53 @@
                 });
             }
 
-            // Keep stickman inside canvas boundaries
             const margin = 25;
             player.x = Math.max(margin, Math.min(canvas.width - margin, player.x));
             player.y = Math.max(margin + 30, Math.min(canvas.height - margin - 20, player.y));
 
-            // Walk animation cycle updates
             if (dx !== 0 || dy !== 0) {
                 player.walkFrame += 0.25;
             } else {
                 player.walkFrame = 0;
             }
 
-            // Punch Trigger
+            // Swing Trigger
             if (keys['Space']) {
-                triggerPunch();
+                triggerSwing();
             }
 
-            if (player.punchTimer > 0) {
-                player.punchTimer--;
+            if (player.swingTimer > 0) {
+                player.swingTimer--;
+            }
+
+            // Net Swing Collision Check with Butterflies
+            if (player.swingTimer > 0) {
+                const progress = 1 - (player.swingTimer / player.swingDuration);
+                const swingAngle = -Math.PI / 3 + progress * (Math.PI * 0.85);
+                const handleLength = 36;
+                const netX = player.x + Math.cos(swingAngle) * handleLength * player.facing;
+                const netY = (player.y - 22) + Math.sin(swingAngle) * handleLength;
+                const netRadius = 24;
+
+                // Catch and erase butterflies touched by the net loop
+                for (let i = butterflies.length - 1; i >= 0; i--) {
+                    const b = butterflies[i];
+                    const dist = Math.hypot(netX - b.x, netY - b.y);
+                    if (dist < netRadius + b.radius) {
+                        butterflies.splice(i, 1); // Erase caught butterfly
+                        bonusSeconds += 10;        // Award 10 points
+                    }
+                }
             }
 
             // Pizza Pickup Detection
             const pizzaDist = Math.hypot(player.x - pizza.x, (player.y - 15) - pizza.y);
             if (pizzaDist < pizza.radius + 15) {
-                bonusSeconds += 50; // Add 50 seconds to score
+                bonusSeconds += 50;
                 if (player.hearts < player.maxHearts) {
-                    player.hearts++; // Gain 1 heart back
+                    player.hearts++;
                 }
-                spawnPizza(); // Respawn pizza elsewhere
+                spawnPizza();
                 updateHUD();
             }
 
@@ -464,7 +476,6 @@
                 b.y += b.vy;
                 b.flapFrame += 0.2;
 
-                // Wall Bouncing
                 if (b.x - b.radius < 0) {
                     b.x = b.radius;
                     b.vx *= -1;
@@ -481,11 +492,9 @@
                     b.vy *= -1;
                 }
 
-                // Random slight steering flutter
                 b.vx += (Math.random() - 0.5) * 0.3;
                 b.vy += (Math.random() - 0.5) * 0.3;
                 
-                // Clamp speed
                 const maxSpeed = 3.5;
                 const speed = Math.hypot(b.vx, b.vy);
                 if (speed > maxSpeed) {
@@ -493,14 +502,12 @@
                     b.vy = (b.vy / speed) * maxSpeed;
                 }
 
-                // Check Collision with Stickman
                 if (player.invulnerableTimer <= 0) {
                     const dist = Math.hypot(player.x - b.x, (player.y - 20) - b.y);
                     if (dist < b.radius + 20) {
-                        // HIT BY BUTTERFLY!
                         player.hearts--;
-                        player.proneTimer = 2.0;       // Falls prone for 2 seconds
-                        player.invulnerableTimer = 4.0; // Invulnerable for 4 seconds
+                        player.proneTimer = 2.0;
+                        player.invulnerableTimer = 4.0;
 
                         updateHUD();
 
@@ -522,11 +529,9 @@
         }
 
         function drawMeadow() {
-            // Base Meadow Grass
             ctx.fillStyle = '#4CAF50';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Subtle Grass Texture Patches
             ctx.fillStyle = '#43A047';
             for (let x = 0; x < canvas.width; x += 100) {
                 for (let y = 0; y < canvas.height; y += 100) {
@@ -538,7 +543,6 @@
                 }
             }
 
-            // Draw Flowers
             flowers.forEach(f => {
                 ctx.fillStyle = f.color;
                 ctx.beginPath();
@@ -555,17 +559,14 @@
         function drawTree(tree) {
             ctx.save();
 
-            // Tree Base Shadow
             ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
             ctx.beginPath();
             ctx.ellipse(tree.x, tree.y + 12, tree.radius, tree.radius * 0.4, 0, 0, Math.PI * 2);
             ctx.fill();
 
-            // Trunk
             ctx.fillStyle = '#5d4037';
             ctx.fillRect(tree.x - 7, tree.y - 10, 14, 22);
 
-            // Foliage / Canopy Layers
             ctx.fillStyle = '#1b5e20';
             ctx.beginPath();
             ctx.arc(tree.x, tree.y - 18, tree.radius, 0, Math.PI * 2);
@@ -588,13 +589,11 @@
             ctx.save();
             ctx.translate(p.x, p.y);
 
-            // Crust Back Curve
             ctx.fillStyle = '#d7ccc8';
             ctx.beginPath();
             ctx.arc(0, -12, 12, Math.PI, 0, true);
             ctx.fill();
 
-            // Slice Base
             ctx.fillStyle = '#8d6e63';
             ctx.beginPath();
             ctx.moveTo(0, 12);
@@ -603,7 +602,6 @@
             ctx.closePath();
             ctx.fill();
 
-            // Cheese Triangle
             ctx.fillStyle = '#ffd54f';
             ctx.beginPath();
             ctx.moveTo(0, 8);
@@ -612,7 +610,6 @@
             ctx.closePath();
             ctx.fill();
 
-            // Pepperoni Circles
             ctx.fillStyle = '#e53935';
             ctx.beginPath();
             ctx.arc(-3, -3, 2.5, 0, Math.PI * 2);
@@ -629,20 +626,16 @@
 
             const flapScale = Math.sin(b.flapFrame);
 
-            // Wings
             ctx.fillStyle = b.color;
             
-            // Left Wing
             ctx.beginPath();
             ctx.ellipse(-6 * Math.abs(flapScale), 0, 8 * Math.abs(flapScale), 10, Math.PI / 4, 0, Math.PI * 2);
             ctx.fill();
 
-            // Right Wing
             ctx.beginPath();
             ctx.ellipse(6 * Math.abs(flapScale), 0, 8 * Math.abs(flapScale), 10, -Math.PI / 4, 0, Math.PI * 2);
             ctx.fill();
 
-            // Body
             ctx.fillStyle = '#222222';
             ctx.beginPath();
             ctx.ellipse(0, 0, 2, 7, 0, 0, Math.PI * 2);
@@ -651,8 +644,7 @@
             ctx.restore();
         }
 
-        function drawStickman(x, y, facing, walkFrame, punchTimer) {
-            // Blink if invulnerable (and not prone)
+        function drawStickman(x, y, facing, walkFrame, swingTimer) {
             if (player.invulnerableTimer > 0 && Math.floor(Date.now() / 150) % 2 === 0) {
                 ctx.globalAlpha = 0.4;
             } else {
@@ -665,32 +657,26 @@
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
 
-            // PRONE ANIMATION
             if (player.proneTimer > 0) {
                 ctx.save();
                 ctx.translate(x, y);
                 
-                // Draw prone flat figure
-                // Head
                 ctx.beginPath();
                 ctx.arc(facing * 25, 10, 8, 0, Math.PI * 2);
                 ctx.stroke();
 
-                // Knocked out eyes (X X)
                 ctx.strokeStyle = '#ffeb3b';
                 ctx.beginPath();
                 ctx.moveTo(facing * 23, 8); ctx.lineTo(facing * 27, 12);
                 ctx.moveTo(facing * 27, 8); ctx.lineTo(facing * 23, 12);
                 ctx.stroke();
 
-                // Body laying down
                 ctx.strokeStyle = '#ffffff';
                 ctx.beginPath();
                 ctx.moveTo(facing * 18, 10);
                 ctx.lineTo(-facing * 15, 10);
                 ctx.stroke();
 
-                // Legs sprawl
                 ctx.beginPath();
                 ctx.moveTo(-facing * 15, 10);
                 ctx.lineTo(-facing * 30, 5);
@@ -698,7 +684,6 @@
                 ctx.lineTo(-facing * 28, 16);
                 ctx.stroke();
 
-                // Arms sprawl
                 ctx.beginPath();
                 ctx.moveTo(0, 10);
                 ctx.lineTo(facing * 10, 2);
@@ -711,7 +696,6 @@
                 return;
             }
 
-            // REGULAR STANDING / WALKING ANIMATION
             const headRadius = 10;
             const bodyLength = 30;
             const legLength = 22;
@@ -724,7 +708,7 @@
             ctx.arc(x, headY, headRadius, 0, Math.PI * 2);
             ctx.stroke();
 
-            // Eye direction indicator
+            // Eye
             ctx.beginPath();
             ctx.arc(x + facing * 4, headY - 1, 1.5, 0, Math.PI * 2);
             ctx.fill();
@@ -755,43 +739,69 @@
             ctx.lineTo(x - facing * 8 - armSwing, shoulderY + 12);
             ctx.stroke();
 
-            // 5. Front Arm (Punch / Walking Pose)
+            // 5. Front Arm & Butterfly Net
+            let angle;
+            if (swingTimer > 0) {
+                const progress = 1 - (swingTimer / player.swingDuration);
+                angle = -Math.PI / 3 + progress * (Math.PI * 0.85);
+            } else {
+                angle = -Math.PI / 3; // Resting position
+            }
+
+            const handleLen = 36;
+            const handX = x + facing * 12;
+            const handY = shoulderY + 4;
+            const netTipX = handX + Math.cos(angle) * handleLen * facing;
+            const netTipY = handY + Math.sin(angle) * handleLen;
+
+            // Arm holding net handle
             ctx.beginPath();
             ctx.moveTo(x, shoulderY);
+            ctx.lineTo(handX, handY);
+            ctx.stroke();
 
-            if (punchTimer > 0) {
-                const fistX = x + facing * 34;
-                const fistY = shoulderY - 2;
+            // Net Handle (Wooden Stick)
+            ctx.save();
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = '#d7ccc8';
+            ctx.beginPath();
+            ctx.moveTo(handX, handY);
+            ctx.lineTo(netTipX, netTipY);
+            ctx.stroke();
 
-                ctx.lineTo(fistX, fistY);
-                ctx.stroke();
+            // Net Hoop & Mesh
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+            
+            const ringRadius = 13;
+            ctx.beginPath();
+            ctx.arc(netTipX + facing * ringRadius * 0.6, netTipY, ringRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
 
-                ctx.beginPath();
-                ctx.arc(fistX, fistY, 3.5, 0, Math.PI * 2);
-                ctx.fill();
-            } else {
-                ctx.lineTo(x + facing * 8 + armSwing, shoulderY + 12);
-                ctx.stroke();
-            }
+            // Net Grid Lines
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.lineWidth = 1;
+            const hoopCX = netTipX + facing * ringRadius * 0.6;
+            ctx.beginPath();
+            ctx.moveTo(hoopCX - ringRadius * 0.7, netTipY);
+            ctx.lineTo(hoopCX + ringRadius * 0.7, netTipY);
+            ctx.moveTo(hoopCX, netTipY - ringRadius * 0.7);
+            ctx.lineTo(hoopCX, netTipY + ringRadius * 0.7);
+            ctx.stroke();
+
+            ctx.restore();
 
             ctx.globalAlpha = 1.0;
         }
 
         function draw() {
-            // Clear & Draw Meadow
             drawMeadow();
-
-            // Draw Trees
             trees.forEach(drawTree);
-
-            // Draw Pizza
             drawPizza(pizza);
-
-            // Draw Butterflies
             butterflies.forEach(drawButterfly);
-
-            // Draw Stickman
-            drawStickman(player.x, player.y, player.facing, player.walkFrame, player.punchTimer);
+            drawStickman(player.x, player.y, player.facing, player.walkFrame, player.swingTimer);
         }
 
         function animate(now) {
