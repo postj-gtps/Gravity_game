@@ -155,6 +155,7 @@
         const TRAIL_LENGTH = 35;           // Number of historic trail points stored
         const SOFTENING_FACTOR = 300;      // Prevents infinite velocity near gravity centers
         const COOLDOWN_TIME_MS = 1000;     // Spam limit: 1 launch per second
+        const MAX_ROCKETS = 50;            // Maximum rockets allowed onscreen at once
 
         // STATE VARIABLES
         let rockets = [];
@@ -301,6 +302,11 @@
             const angleStep = (Math.PI * 2) / count;
 
             for (let i = 0; i < count; i++) {
+                // Remove oldest rocket if maximum onscreen count (50) is reached
+                if (rockets.length >= MAX_ROCKETS) {
+                    rockets.shift();
+                }
+
                 const angle = i * angleStep;
                 const vx = LAUNCH_VELOCITY * Math.cos(angle);
                 const vy = LAUNCH_VELOCITY * Math.sin(angle);
