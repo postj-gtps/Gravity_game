@@ -25,7 +25,7 @@
       touch-action: manipulation;
     }
 
-    /* Outer Container */
+    /* Outer Container for 1366x768 Chromebook Displays */
     #app-container {
       display: flex;
       flex-direction: column;
@@ -37,7 +37,7 @@
       gap: 8px;
     }
 
-    /* Top Control Bar */
+    /* Header Bar with Title & Spam-click Cooldown Badge */
     #header-bar {
       display: flex;
       justify-content: space-between;
@@ -62,7 +62,7 @@
       letter-spacing: 0.5px;
     }
 
-    /* Spam-click Cooldown Badge */
+    /* Spam-click Cooldown Badge (1 launch / sec) */
     #cooldown-badge {
       display: flex;
       align-items: center;
@@ -74,7 +74,7 @@
       font-size: 15px;
       font-weight: bold;
       color: #34d399;
-      min-width: 220px;
+      min-width: 230px;
       justify-content: center;
       transition: all 0.2s ease;
     }
@@ -104,7 +104,7 @@
       background: #f59e0b;
     }
 
-    /* Selector and Buttons Bar */
+    /* Controls Toolbar */
     #controls-bar {
       display: flex;
       justify-content: space-between;
@@ -177,7 +177,7 @@
       border-color: #a5b4fc;
     }
 
-    /* Main Canvas Area */
+    /* Simulation Canvas Container */
     #canvas-container {
       position: relative;
       flex: 1;
@@ -196,7 +196,7 @@
       cursor: pointer;
     }
 
-    /* Instructions Banner */
+    /* Footer Instruction Banner */
     #instruction-banner {
       text-align: center;
       background: #1e1b4b;
@@ -207,6 +207,15 @@
       color: #e0e7ff;
       font-weight: bold;
     }
+
+    .speed-badge {
+      background: #0284c7;
+      color: #ffffff;
+      padding: 2px 8px;
+      border-radius: 8px;
+      margin-left: 6px;
+      font-size: 13px;
+    }
   </style>
 </head>
 <body>
@@ -215,7 +224,7 @@
     <!-- Header with Title & Spam-click Cooldown -->
     <div id="header-bar">
       <div class="title-group">
-        <h1>🚀 Space Playground</h1>
+        <h1>🚀 Space Playground <span class="speed-badge">🐢 30% Slow Mo</span></h1>
       </div>
 
       <!-- Spam-click indicator (1 spawn per second max) -->
@@ -260,25 +269,27 @@
 
     <!-- Instruction Footer -->
     <div id="instruction-banner">
-      👉 Tap anywhere in space to launch! Asteroids drift free from solar gravity!
+      👉 Tap anywhere in space to launch! All speeds slowed to 30% for easy watching!
     </div>
   </div>
 
   <script>
-    // Canvas & Setup
+    // Canvas & Context Setup
     const canvas = document.getElementById('simCanvas');
     const ctx = canvas.getContext('2d');
     const container = document.getElementById('canvas-container');
 
-    // SIMULATION CONSTANTS
-    const G = 1500;                  // Gravitational strength
-    const SOFTENING = 300;           // Prevents extreme acceleration near Sun
-    const COOLDOWN_TIME = 1000;      // 1-second spam-click restriction
-    const RESTITUTION = 0.88;        // Elastic collision bounce factor (Newtonian physics)
+    // --- CRITICAL 30% SLOWDOWN CONSTANTS ---
+    // Scaled for exact orbital stability at 30% linear speed (v_new = 0.3 * v_orig => G_new = 0.09 * G_orig)
+    const SPEED_SCALE = 0.30;              // Global velocity multiplier
+    const G = 135;                         // Gravitational constant (1500 * 0.3^2 = 135)
+    const SOFTENING = 300;                  // Prevents extreme acceleration near Sun
+    const COOLDOWN_TIME = 1000;             // 1-second spam-click restriction
+    const RESTITUTION = 0.88;               // Elastic collision bounce factor
 
     // STATE VARIABLES
-    let spawnType = 'earth';         // 'earth' or 'ship'
-    let lastSpawnTime = 0;           // Timestamp for cooldown
+    let spawnType = 'earth';                // 'earth' or 'ship'
+    let lastSpawnTime = 0;                  // Timestamp for cooldown
     let audioEnabled = true;
 
     // Celestial Objects Arrays
@@ -295,13 +306,13 @@
       pulse: 0
     };
 
-    // Resizing & HiDPI Support
+    // Resizing & Dynamic Centering
     function resizeCanvas() {
       const rect = container.getBoundingClientRect();
       canvas.width = rect.width;
       canvas.height = rect.height;
 
-      // Recenter Sun
+      // Recenter Central Sun
       sun.x = canvas.width / 2;
       sun.y = canvas.height / 2;
 
@@ -318,14 +329,14 @@
           y: Math.random() * canvas.height,
           radius: Math.random() * 1.8 + 0.5,
           alpha: Math.random(),
-          speed: Math.random() * 0.02 + 0.005
+          speed: (Math.random() * 0.02 + 0.005) * SPEED_SCALE
         });
       }
     }
 
     window.addEventListener('resize', resizeCanvas);
 
-    // Audio Synthesizer Effects (Web Audio API)
+    // Synthesized Web Audio Sound Effects
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     let audioCtx = null;
 
@@ -349,35 +360,32 @@
         const now = audioCtx.currentTime;
 
         if (type === 'launch') {
-          // Launch sweep sound
           osc.type = 'sine';
           osc.frequency.setValueAtTime(220, now);
-          osc.frequency.exponentialRampToValueAtTime(660, now + 0.15);
+          osc.frequency.exponentialRampToValueAtTime(660, now + 0.25);
           gain.gain.setValueAtTime(0.15, now);
-          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
           osc.start(now);
-          osc.stop(now + 0.15);
+          osc.stop(now + 0.25);
         } else if (type === 'bounce') {
-          // Bouncy elastic collision sound
           osc.type = 'triangle';
           osc.frequency.setValueAtTime(180, now);
-          osc.frequency.exponentialRampToValueAtTime(90, now + 0.12);
+          osc.frequency.exponentialRampToValueAtTime(90, now + 0.2);
           gain.gain.setValueAtTime(0.25, now);
-          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
-          osc.start(now);
-          osc.stop(now + 0.12);
-        } else if (type === 'sun') {
-          // Sun burn/sizzle sound
-          osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(300, now);
-          osc.frequency.linearRampToValueAtTime(100, now + 0.2);
-          gain.gain.setValueAtTime(0.2, now);
-          gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
           osc.start(now);
           osc.stop(now + 0.2);
+        } else if (type === 'sun') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(300, now);
+          osc.frequency.linearRampToValueAtTime(100, now + 0.3);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+          osc.start(now);
+          osc.stop(now + 0.3);
         }
       } catch (e) {
-        // Fallback gracefully if audio fails
+        // Fallback gracefully if Web Audio is restricted
       }
     }
 
@@ -402,9 +410,9 @@
       const y = clientY - rect.top;
 
       const now = Date.now();
-      // Enforce 1 spawn per second rule
+      // Enforce 1-second spam click filter
       if (now - lastSpawnTime < COOLDOWN_TIME) {
-        return; // Filter out spam clicks
+        return;
       }
 
       lastSpawnTime = now;
@@ -415,16 +423,15 @@
       handlePointerInput(e.clientX, e.clientY);
     });
 
-    // Spawn Logic
+    // Object Spawning with 30% Speed Calculation
     function spawnObject(x, y) {
       playSound('launch');
 
-      // Calculate initial tangential velocity around Sun for pleasant orbits
       const dx = x - sun.x;
       const dy = y - sun.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      // Tangent vector
+      // Orbital tangent vector calculation
       const orbitSpeed = Math.sqrt((G * sun.mass) / (dist + 50)) * 0.85;
       const tangentX = -dy / dist;
       const tangentY = dx / dist;
@@ -447,9 +454,9 @@
         };
         bodies.push(earth);
 
-        // Spawn Moon orbiting Earth
+        // Spawn Moon orbiting Earth at 30% speed
         const moonDistance = 38;
-        const moonOrbitSpeed = 3.2;
+        const moonOrbitSpeed = 3.2 * SPEED_SCALE; // 0.96
         const moon = {
           id: Math.random(),
           type: 'moon',
@@ -465,7 +472,7 @@
         bodies.push(moon);
 
       } else if (spawnType === 'ship') {
-        // Spawn Spaceship (No Moon)
+        // Spawn Spaceship (Solo)
         const ship = {
           id: Math.random(),
           type: 'ship',
@@ -482,7 +489,7 @@
       }
     }
 
-    // Add Drifting Asteroid (UNAFFECTED BY SUN GRAVITY)
+    // Add Slow Drifting Asteroid (UNAFFECTED BY SUN GRAVITY)
     function addAsteroid() {
       playSound('launch');
 
@@ -496,13 +503,13 @@
         y = Math.random() < 0.5 ? -20 : canvas.height + 20;
       }
 
-      // Aim towards central space region with gentle linear velocity
+      // Target central area with 30% speed drift
       const targetX = canvas.width / 2 + (Math.random() - 0.5) * 400;
       const targetY = canvas.height / 2 + (Math.random() - 0.5) * 400;
       const angle = Math.atan2(targetY - y, targetX - x);
-      const speed = Math.random() * 2 + 1.5;
+      const speed = (Math.random() * 2 + 1.5) * SPEED_SCALE; // 30% speed
 
-      // Generate random asteroid vertex shape
+      // Procedural asteroid shape vertices
       const numVertices = 7 + Math.floor(Math.random() * 4);
       const vertOffsets = [];
       for (let i = 0; i < numVertices; i++) {
@@ -519,13 +526,13 @@
         radius: 15 + Math.random() * 8,
         mass: 30,
         rotation: Math.random() * Math.PI * 2,
-        rotSpeed: (Math.random() - 0.5) * 0.04,
+        rotSpeed: (Math.random() - 0.5) * 0.04 * SPEED_SCALE, // 30% rotation speed
         vertices: vertOffsets,
         trail: []
       });
     }
 
-    // Maintain a baseline of asteroids drifting through space
+    // Keep baseline asteroids drifting through space
     function maintainAsteroidCount() {
       const asteroidCount = bodies.filter(b => b.type === 'asteroid').length;
       if (asteroidCount < 3) {
@@ -536,7 +543,7 @@
     function createSparkles(x, y, color, count = 10) {
       for (let i = 0; i < count; i++) {
         const ang = Math.random() * Math.PI * 2;
-        const spd = Math.random() * 4 + 1;
+        const spd = (Math.random() * 4 + 1) * SPEED_SCALE; // Slow particle bursts
         particles.push({
           x: x,
           y: y,
@@ -545,7 +552,7 @@
           radius: Math.random() * 3 + 1.5,
           color: color,
           life: 1.0,
-          decay: Math.random() * 0.04 + 0.02
+          decay: (Math.random() * 0.04 + 0.02) * SPEED_SCALE
         });
       }
     }
@@ -553,7 +560,6 @@
     function resetSpace() {
       bodies = [];
       particles = [];
-      // Re-add initial floating asteroids for dynamic fun
       for (let i = 0; i < 3; i++) {
         addAsteroid();
       }
@@ -561,13 +567,12 @@
 
     // --- PHYSICS ENGINE ---
     function updatePhysics() {
-      // 1. Gravitational Attracting Forces & Motion
+      // 1. Gravitational Forces & Motion
       for (let i = 0; i < bodies.length; i++) {
         const b = bodies[i];
 
-        // ASTEROID EXEMPTION: Asteroids drift unaffected by the Sun's gravity!
+        // ASTEROIDS ARE EXEMPT FROM SUN GRAVITY
         if (b.type !== 'asteroid') {
-          // Pull toward Sun (for Earth, Moon, Spaceships)
           const dxSun = sun.x - b.x;
           const dySun = sun.y - b.y;
           const distSqSun = dxSun * dxSun + dySun * dySun;
@@ -580,7 +585,7 @@
           }
         }
 
-        // Special Mutual Gravity for Earth & Moon
+        // Mutual Gravity for Earth & Moon
         if (b.type === 'moon') {
           const earth = bodies.find(other => other.id === b.parentEarthId);
           if (earth) {
@@ -597,25 +602,25 @@
           }
         }
 
-        // Apply velocity to position
+        // Move position
         b.x += b.vx;
         b.y += b.vy;
 
-        // Rotation update for asteroids & rockets
+        // Rotation & orientation updates
         if (b.type === 'asteroid') {
           b.rotation += b.rotSpeed;
         } else if (b.type === 'ship') {
           b.angle = Math.atan2(b.vy, b.vx);
         }
 
-        // Record visual motion trail
+        // Smooth tail recording
         b.trail.push({ x: b.x, y: b.y });
-        if (b.trail.length > 25) {
+        if (b.trail.length > 35) {
           b.trail.shift();
         }
       }
 
-      // 2. Newtonian Elastic Collisions (Pairwise)
+      // 2. Newtonian Elastic Collisions
       for (let i = 0; i < bodies.length; i++) {
         for (let j = i + 1; j < bodies.length; j++) {
           const b1 = bodies[i];
@@ -627,11 +632,11 @@
           const minDist = b1.radius + b2.radius;
 
           if (dist < minDist && dist > 0) {
-            // Collision detected! Calculate Newtonian Bounce
+            // Elastic Bounce!
             playSound('bounce');
             createSparkles((b1.x + b2.x) / 2, (b1.y + b2.y) / 2, '#fbbf24', 12);
 
-            // 1. Separate overlapping positions to prevent sticking
+            // Separate overlapping radii
             const overlap = minDist - dist;
             const nx = dx / dist;
             const ny = dy / dist;
@@ -642,7 +647,7 @@
             b2.x += nx * overlap * (b1.mass / totalMass);
             b2.y += ny * overlap * (b1.mass / totalMass);
 
-            // 2. Velocity Exchange along normal vector
+            // Newtonian momentum exchange
             const kx = b1.vx - b2.vx;
             const ky = b1.vy - b2.vy;
             const p = 2 * (nx * kx + ny * ky) / totalMass;
@@ -655,11 +660,10 @@
         }
       }
 
-      // 3. Sun Absorption & Boundary Cleanup Check
+      // 3. Central Sun Absorption & Bounds Cleanup
       for (let i = bodies.length - 1; i >= 0; i--) {
         const b = bodies[i];
 
-        // Absorbed by central Sun
         const distToSun = Math.hypot(sun.x - b.x, sun.y - b.y);
         if (distToSun < sun.radius + b.radius * 0.5) {
           playSound('sun');
@@ -668,7 +672,6 @@
           continue;
         }
 
-        // Remove if flung far out of bounds
         const margin = 300;
         if (b.x < -margin || b.x > canvas.width + margin ||
             b.y < -margin || b.y > canvas.height + margin) {
@@ -676,7 +679,7 @@
         }
       }
 
-      // Update particle sparks
+      // Update sparkle particles
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         p.x += p.vx;
@@ -692,7 +695,7 @@
 
     // --- DRAWING FUNCTIONS ---
     function draw() {
-      // Background Space
+      // Clear space background
       ctx.fillStyle = '#0b0d1b';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -707,10 +710,10 @@
       }
 
       // Draw Central Sun
-      sun.pulse += 0.03;
+      sun.pulse += 0.01; // Slow pulse rate
       const glowRadius = sun.radius + Math.sin(sun.pulse) * 4 + 8;
 
-      // Sun Outer Glow
+      // Sun Outer Corona
       const sunGlow = ctx.createRadialGradient(sun.x, sun.y, sun.radius * 0.5, sun.x, sun.y, glowRadius * 2);
       sunGlow.addColorStop(0, 'rgba(251, 191, 36, 0.9)');
       sunGlow.addColorStop(0.5, 'rgba(245, 158, 11, 0.4)');
@@ -721,7 +724,7 @@
       ctx.arc(sun.x, sun.y, glowRadius * 2, 0, Math.PI * 2);
       ctx.fill();
 
-      // Sun Core Body
+      // Sun Body Core
       const sunGradient = ctx.createRadialGradient(sun.x - 8, sun.y - 8, 4, sun.x, sun.y, sun.radius);
       sunGradient.addColorStop(0, '#fef08a');
       sunGradient.addColorStop(0.7, '#f59e0b');
@@ -734,12 +737,11 @@
 
       // Cheerful Sun Face for 1st Graders
       ctx.fillStyle = '#78350f';
-      // Eyes
       ctx.beginPath();
       ctx.arc(sun.x - 10, sun.y - 6, 3.5, 0, Math.PI * 2);
       ctx.arc(sun.x + 10, sun.y - 6, 3.5, 0, Math.PI * 2);
       ctx.fill();
-      // Smile
+
       ctx.beginPath();
       ctx.arc(sun.x, sun.y + 2, 10, 0.1 * Math.PI, 0.9 * Math.PI);
       ctx.lineWidth = 3;
@@ -771,7 +773,7 @@
         ctx.translate(b.x, b.y);
 
         if (b.type === 'earth') {
-          // Atmosphere Glow
+          // Atmosphere
           ctx.beginPath();
           ctx.arc(0, 0, b.radius + 3, 0, Math.PI * 2);
           ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
@@ -783,7 +785,7 @@
           ctx.fillStyle = '#0284c7';
           ctx.fill();
 
-          // Continents (Green Patches)
+          // Green Continents
           ctx.fillStyle = '#22c55e';
           ctx.beginPath();
           ctx.arc(-4, -4, 6, 0, Math.PI * 2);
@@ -791,7 +793,7 @@
           ctx.arc(-2, 7, 4, 0, Math.PI * 2);
           ctx.fill();
 
-          // Cloud Highlights
+          // Clouds
           ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
           ctx.beginPath();
           ctx.arc(3, -7, 3, 0, Math.PI * 2);
@@ -799,13 +801,12 @@
           ctx.fill();
 
         } else if (b.type === 'moon') {
-          // Moon Body
+          // Moon
           ctx.beginPath();
           ctx.arc(0, 0, b.radius, 0, Math.PI * 2);
           ctx.fillStyle = '#e2e8f0';
           ctx.fill();
 
-          // Craters
           ctx.fillStyle = '#cbd5e1';
           ctx.beginPath();
           ctx.arc(-1.5, -1.5, 1.5, 0, Math.PI * 2);
@@ -819,27 +820,24 @@
           ctx.fillStyle = Math.random() < 0.5 ? '#f97316' : '#facc15';
           ctx.beginPath();
           ctx.moveTo(-4, 10);
-          ctx.lineTo(0, 18 + Math.random() * 6);
+          ctx.lineTo(0, 16 + Math.random() * 5);
           ctx.lineTo(4, 10);
           ctx.closePath();
           ctx.fill();
 
           // Rocket Body
-          ctx.fillStyle = '#f43f5e'; // Red fins/tip
-          // Fins
+          ctx.fillStyle = '#f43f5e';
           ctx.beginPath();
           ctx.moveTo(-9, 10);
           ctx.lineTo(0, -12);
           ctx.lineTo(9, 10);
           ctx.fill();
 
-          // Main Capsule
           ctx.fillStyle = '#f8fafc';
           ctx.beginPath();
           ctx.arc(0, 0, 7, 0, Math.PI * 2);
           ctx.fill();
 
-          // Cockpit Window
           ctx.fillStyle = '#38bdf8';
           ctx.beginPath();
           ctx.arc(0, -2, 3, 0, Math.PI * 2);
@@ -848,7 +846,7 @@
         } else if (b.type === 'asteroid') {
           ctx.rotate(b.rotation);
 
-          // Jagged Asteroid Polygon
+          // Jagged Polygon
           ctx.beginPath();
           const verts = b.vertices;
           for (let i = 0; i < verts.length; i++) {
@@ -867,7 +865,7 @@
           ctx.lineWidth = 2;
           ctx.stroke();
 
-          // Asteroid Surface Crater
+          // Crater
           ctx.fillStyle = '#4b5563';
           ctx.beginPath();
           ctx.arc(-b.radius * 0.3, -b.radius * 0.2, b.radius * 0.25, 0, Math.PI * 2);
@@ -891,7 +889,7 @@
       updateCooldownUI();
     }
 
-    // Cooldown UI Update
+    // Cooldown Bar Update
     function updateCooldownUI() {
       const badge = document.getElementById('cooldown-badge');
       const text = document.getElementById('cooldown-text');
@@ -911,7 +909,7 @@
       }
     }
 
-    // Animation Loop
+    // Main Animation Loop
     function animate() {
       updatePhysics();
       draw();
