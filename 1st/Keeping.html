@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>1st Grade Space Gravity Simulator</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      margin: 0;
+      padding: 0;
+      font-family: 'Fredoka', 'Nunito', system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      background-color: #0b0d1b;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+
+    /* Outer Container */
+    #app-container {
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+      max-width: 1366px;
+      max-height: 768px;
+      padding: 10px;
+      gap: 8px;
+    }
+
+    /* Top Control Bar */
+    #header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(135deg, #1e1b4b, #312e81);
+      border: 3px solid #6366f1;
+      border-radius: 16px;
+      padding: 8px 16px;
+      box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+    }
+
+    .title-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h1 {
+      font-size: 20px;
+      color: #fbbf24;
+      text-shadow: 2px 2px 0px #000;
+      letter-spacing: 0.5px;
+    }
+
+    /* Spam-click Cooldown Badge */
+    #cooldown-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #00000055;
+      border: 2px solid #10b981;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 15px;
+      font-weight: bold;
+      color: #34d399;
+      min-width: 220px;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    #cooldown-badge.charging {
+      border-color: #f59e0b;
+      color: #fbbf24;
+      background: #451a0366;
+    }
+
+    .cooldown-bar-bg {
+      width: 60px;
+      height: 10px;
+      background: #374151;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+
+    .cooldown-bar-fill {
+      height: 100%;
+      width: 100%;
+      background: #10b981;
+      transition: width 0.05s linear;
+    }
+
+    .charging .cooldown-bar-fill {
+      background: #f59e0b;
+    }
+
+    /* Selector and Buttons Bar */
+    #controls-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .selector-group {
+      display: flex;
+      background: #1f2937;
+      padding: 4px;
+      border-radius: 16px;
+      border: 2px solid #4b5563;
+      gap: 6px;
+    }
+
+    .select-btn {
+      background: #374151;
+      color: #d1d5db;
+      border: 2px solid transparent;
+      padding: 10px 18px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+      min-height: 48px;
+    }
+
+    .select-btn.active {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #ffffff;
+      border-color: #60a5fa;
+      box-shadow: 0 0 10px rgba(37, 99, 235, 0.6);
+      transform: scale(1.03);
+    }
+
+    .action-btn {
+      background: linear-gradient(135deg, #d97706, #b45309);
+      color: #fff;
+      border: 2px solid #fcd34d;
+      padding: 10px 18px;
+      font-size: 15px;
+      font-weight: bold;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+      transition: transform 0.1s active;
+      min-height: 48px;
+    }
+
+    .action-btn:active {
+      transform: scale(0.95);
+    }
+
+    .action-btn.reset-btn {
+      background: linear-gradient(135deg, #dc2626, #991b1b);
+      border-color: #fca5a5;
+    }
+
+    .action-btn.audio-btn {
+      background: linear-gradient(135deg, #4f46e5, #3730a3);
+      border-color: #a5b4fc;
+    }
+
+    /* Main Canvas Area */
+    #canvas-container {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      border-radius: 20px;
+      overflow: hidden;
+      border: 3px solid #4338ca;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+      background: radial-gradient(circle at center, #111827 0%, #030712 100%);
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: pointer;
+    }
+
+    /* Instructions Banner */
+    #instruction-banner {
+      text-align: center;
+      background: #1e1b4b;
+      border: 2px solid #6366f1;
+      padding: 8px 14px;
+      border-radius: 12px;
+      font-size: 15px;
+      color: #e0e7ff;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="app-container">
+    <!-- Header with Title & Spam-click Cooldown -->
+    <div id="header-bar">
+      <div class="title-group">
+        <h1>🚀 Space Playground</h1>
+      </div>
+
+      <!-- Spam-click indicator (1 spawn per second max) -->
+      <div id="cooldown-badge">
+        <span id="cooldown-text">🚀 READY TO LAUNCH!</span>
+        <div class="cooldown-bar-bg">
+          <div id="cooldown-fill" class="cooldown-bar-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive Control Bar -->
+    <div id="controls-bar">
+      <!-- Object Spawn Selector -->
+      <div class="selector-group">
+        <button id="btn-select-earth" class="select-btn active" onclick="setSpawnType('earth')">
+          🌍 Earth + Moon
+        </button>
+        <button id="btn-select-ship" class="select-btn" onclick="setSpawnType('ship')">
+          🚀 Spaceship
+        </button>
+      </div>
+
+      <!-- Action Buttons -->
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button class="action-btn" onclick="addAsteroid()">
+          🪨 Add Asteroid
+        </button>
+        <button class="action-btn audio-btn" id="audio-toggle-btn" onclick="toggleAudio()">
+          🔊 Sound: ON
+        </button>
+        <button class="action-btn reset-btn" onclick="resetSpace()">
+          🧹 Clear Space
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Gravity Simulation Canvas -->
+    <div id="canvas-container">
+      <canvas id="simCanvas"></canvas>
+    </div>
+
+    <!-- Instruction Footer -->
+    <div id="instruction-banner">
+      👉 Tap anywhere in space to launch! Asteroids drift free from solar gravity!
+    </div>
+  </div>
+
+  <script>
+    // Canvas & Setup
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('canvas-container');
+
+    // SIMULATION CONSTANTS
+    const G = 1500;                  // Gravitational strength
+    const SOFTENING = 300;           // Prevents extreme acceleration near Sun
+    const COOLDOWN_TIME = 1000;      // 1-second spam-click restriction
+    const RESTITUTION = 0.88;        // Elastic collision bounce factor (Newtonian physics)
+
+    // STATE VARIABLES
+    let spawnType = 'earth';         // 'earth' or 'ship'
+    let lastSpawnTime = 0;           // Timestamp for cooldown
+    let audioEnabled = true;
+
+    // Celestial Objects Arrays
+    let bodies = [];
+    let particles = [];
+    let stars = [];
+
+    // Central Sun Definition
+    const sun = {
+      x: 0,
+      y: 0,
+      radius: 36,
+      mass: 1000,
+      pulse: 0
+    };
+
+    // Resizing & HiDPI Support
+    function resizeCanvas() {
+      const rect = container.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+
+      // Recenter Sun
+      sun.x = canvas.width / 2;
+      sun.y = canvas.height / 2;
+
+      // Regenerate background starfield
+      generateStars();
+    }
+
+    function generateStars() {
+      stars = [];
+      const starCount = Math.floor((canvas.width * canvas.height) / 3000);
+      for (let i = 0; i < starCount; i++) {
+        stars.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          radius: Math.random() * 1.8 + 0.5,
+          alpha: Math.random(),
+          speed: Math.random() * 0.02 + 0.005
+        });
+      }
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+
+    // Audio Synthesizer Effects (Web Audio API)
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new AudioCtx();
+      }
+    }
+
+    function playSound(type) {
+      if (!audioEnabled) return;
+      initAudio();
+      if (!audioCtx) return;
+
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        const now = audioCtx.currentTime;
+
+        if (type === 'launch') {
+          // Launch sweep sound
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(220, now);
+          osc.frequency.exponentialRampToValueAtTime(660, now + 0.15);
+          gain.gain.setValueAtTime(0.15, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+          osc.start(now);
+          osc.stop(now + 0.15);
+        } else if (type === 'bounce') {
+          // Bouncy elastic collision sound
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(180, now);
+          osc.frequency.exponentialRampToValueAtTime(90, now + 0.12);
+          gain.gain.setValueAtTime(0.25, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+          osc.start(now);
+          osc.stop(now + 0.12);
+        } else if (type === 'sun') {
+          // Sun burn/sizzle sound
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(300, now);
+          osc.frequency.linearRampToValueAtTime(100, now + 0.2);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+          osc.start(now);
+          osc.stop(now + 0.2);
+        }
+      } catch (e) {
+        // Fallback gracefully if audio fails
+      }
+    }
+
+    function toggleAudio() {
+      audioEnabled = !audioEnabled;
+      const btn = document.getElementById('audio-toggle-btn');
+      btn.innerText = audioEnabled ? "🔊 Sound: ON" : "🔇 Sound: OFF";
+      btn.style.opacity = audioEnabled ? "1" : "0.7";
+    }
+
+    // Spawn Selector Handler
+    function setSpawnType(type) {
+      spawnType = type;
+      document.getElementById('btn-select-earth').classList.toggle('active', type === 'earth');
+      document.getElementById('btn-select-ship').classList.toggle('active', type === 'ship');
+    }
+
+    // Click/Touch Handling with Spam Filter
+    function handlePointerInput(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
+
+      const now = Date.now();
+      // Enforce 1 spawn per second rule
+      if (now - lastSpawnTime < COOLDOWN_TIME) {
+        return; // Filter out spam clicks
+      }
+
+      lastSpawnTime = now;
+      spawnObject(x, y);
+    }
+
+    canvas.addEventListener('pointerdown', (e) => {
+      handlePointerInput(e.clientX, e.clientY);
+    });
+
+    // Spawn Logic
+    function spawnObject(x, y) {
+      playSound('launch');
+
+      // Calculate initial tangential velocity around Sun for pleasant orbits
+      const dx = x - sun.x;
+      const dy = y - sun.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      // Tangent vector
+      const orbitSpeed = Math.sqrt((G * sun.mass) / (dist + 50)) * 0.85;
+      const tangentX = -dy / dist;
+      const tangentY = dx / dist;
+
+      const vx = tangentX * orbitSpeed;
+      const vy = tangentY * orbitSpeed;
+
+      if (spawnType === 'earth') {
+        // Spawn Earth
+        const earth = {
+          id: Math.random(),
+          type: 'earth',
+          x: x,
+          y: y,
+          vx: vx,
+          vy: vy,
+          radius: 16,
+          mass: 25,
+          trail: []
+        };
+        bodies.push(earth);
+
+        // Spawn Moon orbiting Earth
+        const moonDistance = 38;
+        const moonOrbitSpeed = 3.2;
+        const moon = {
+          id: Math.random(),
+          type: 'moon',
+          x: x + moonDistance,
+          y: y,
+          vx: vx,
+          vy: vy + moonOrbitSpeed,
+          radius: 6,
+          mass: 5,
+          parentEarthId: earth.id,
+          trail: []
+        };
+        bodies.push(moon);
+
+      } else if (spawnType === 'ship') {
+        // Spawn Spaceship (No Moon)
+        const ship = {
+          id: Math.random(),
+          type: 'ship',
+          x: x,
+          y: y,
+          vx: vx,
+          vy: vy,
+          radius: 12,
+          mass: 12,
+          angle: Math.atan2(vy, vx),
+          trail: []
+        };
+        bodies.push(ship);
+      }
+    }
+
+    // Add Drifting Asteroid (UNAFFECTED BY SUN GRAVITY)
+    function addAsteroid() {
+      playSound('launch');
+
+      // Pick edge starting position
+      let x, y;
+      if (Math.random() < 0.5) {
+        x = Math.random() < 0.5 ? -20 : canvas.width + 20;
+        y = Math.random() * canvas.height;
+      } else {
+        x = Math.random() * canvas.width;
+        y = Math.random() < 0.5 ? -20 : canvas.height + 20;
+      }
+
+      // Aim towards central space region with gentle linear velocity
+      const targetX = canvas.width / 2 + (Math.random() - 0.5) * 400;
+      const targetY = canvas.height / 2 + (Math.random() - 0.5) * 400;
+      const angle = Math.atan2(targetY - y, targetX - x);
+      const speed = Math.random() * 2 + 1.5;
+
+      // Generate random asteroid vertex shape
+      const numVertices = 7 + Math.floor(Math.random() * 4);
+      const vertOffsets = [];
+      for (let i = 0; i < numVertices; i++) {
+        vertOffsets.push(0.75 + Math.random() * 0.5);
+      }
+
+      bodies.push({
+        id: Math.random(),
+        type: 'asteroid',
+        x: x,
+        y: y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        radius: 15 + Math.random() * 8,
+        mass: 30,
+        rotation: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.04,
+        vertices: vertOffsets,
+        trail: []
+      });
+    }
+
+    // Maintain a baseline of asteroids drifting through space
+    function maintainAsteroidCount() {
+      const asteroidCount = bodies.filter(b => b.type === 'asteroid').length;
+      if (asteroidCount < 3) {
+        addAsteroid();
+      }
+    }
+
+    function createSparkles(x, y, color, count = 10) {
+      for (let i = 0; i < count; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const spd = Math.random() * 4 + 1;
+        particles.push({
+          x: x,
+          y: y,
+          vx: Math.cos(ang) * spd,
+          vy: Math.sin(ang) * spd,
+          radius: Math.random() * 3 + 1.5,
+          color: color,
+          life: 1.0,
+          decay: Math.random() * 0.04 + 0.02
+        });
+      }
+    }
+
+    function resetSpace() {
+      bodies = [];
+      particles = [];
+      // Re-add initial floating asteroids for dynamic fun
+      for (let i = 0; i < 3; i++) {
+        addAsteroid();
+      }
+    }
+
+    // --- PHYSICS ENGINE ---
+    function updatePhysics() {
+      // 1. Gravitational Attracting Forces & Motion
+      for (let i = 0; i < bodies.length; i++) {
+        const b = bodies[i];
+
+        // ASTEROID EXEMPTION: Asteroids drift unaffected by the Sun's gravity!
+        if (b.type !== 'asteroid') {
+          // Pull toward Sun (for Earth, Moon, Spaceships)
+          const dxSun = sun.x - b.x;
+          const dySun = sun.y - b.y;
+          const distSqSun = dxSun * dxSun + dySun * dySun;
+          const distSun = Math.sqrt(distSqSun);
+
+          if (distSun > 0) {
+            const accelSun = (G * sun.mass) / (distSqSun + SOFTENING);
+            b.vx += accelSun * (dxSun / distSun);
+            b.vy += accelSun * (dySun / distSun);
+          }
+        }
+
+        // Special Mutual Gravity for Earth & Moon
+        if (b.type === 'moon') {
+          const earth = bodies.find(other => other.id === b.parentEarthId);
+          if (earth) {
+            const dxE = earth.x - b.x;
+            const dyE = earth.y - b.y;
+            const distSqE = dxE * dxE + dyE * dyE;
+            const distE = Math.sqrt(distSqE);
+
+            if (distE > 0) {
+              const accelEarth = (G * earth.mass * 1.5) / (distSqE + 100);
+              b.vx += accelEarth * (dxE / distE);
+              b.vy += accelEarth * (dyE / distE);
+            }
+          }
+        }
+
+        // Apply velocity to position
+        b.x += b.vx;
+        b.y += b.vy;
+
+        // Rotation update for asteroids & rockets
+        if (b.type === 'asteroid') {
+          b.rotation += b.rotSpeed;
+        } else if (b.type === 'ship') {
+          b.angle = Math.atan2(b.vy, b.vx);
+        }
+
+        // Record visual motion trail
+        b.trail.push({ x: b.x, y: b.y });
+        if (b.trail.length > 25) {
+          b.trail.shift();
+        }
+      }
+
+      // 2. Newtonian Elastic Collisions (Pairwise)
+      for (let i = 0; i < bodies.length; i++) {
+        for (let j = i + 1; j < bodies.length; j++) {
+          const b1 = bodies[i];
+          const b2 = bodies[j];
+
+          const dx = b2.x - b1.x;
+          const dy = b2.y - b1.y;
+          const dist = Math.hypot(dx, dy);
+          const minDist = b1.radius + b2.radius;
+
+          if (dist < minDist && dist > 0) {
+            // Collision detected! Calculate Newtonian Bounce
+            playSound('bounce');
+            createSparkles((b1.x + b2.x) / 2, (b1.y + b2.y) / 2, '#fbbf24', 12);
+
+            // 1. Separate overlapping positions to prevent sticking
+            const overlap = minDist - dist;
+            const nx = dx / dist;
+            const ny = dy / dist;
+
+            const totalMass = b1.mass + b2.mass;
+            b1.x -= nx * overlap * (b2.mass / totalMass);
+            b1.y -= ny * overlap * (b2.mass / totalMass);
+            b2.x += nx * overlap * (b1.mass / totalMass);
+            b2.y += ny * overlap * (b1.mass / totalMass);
+
+            // 2. Velocity Exchange along normal vector
+            const kx = b1.vx - b2.vx;
+            const ky = b1.vy - b2.vy;
+            const p = 2 * (nx * kx + ny * ky) / totalMass;
+
+            b1.vx -= p * b2.mass * nx * RESTITUTION;
+            b1.vy -= p * b2.mass * ny * RESTITUTION;
+            b2.vx += p * b1.mass * nx * RESTITUTION;
+            b2.vy += p * b1.mass * ny * RESTITUTION;
+          }
+        }
+      }
+
+      // 3. Sun Absorption & Boundary Cleanup Check
+      for (let i = bodies.length - 1; i >= 0; i--) {
+        const b = bodies[i];
+
+        // Absorbed by central Sun
+        const distToSun = Math.hypot(sun.x - b.x, sun.y - b.y);
+        if (distToSun < sun.radius + b.radius * 0.5) {
+          playSound('sun');
+          createSparkles(b.x, b.y, '#f97316', 20);
+          bodies.splice(i, 1);
+          continue;
+        }
+
+        // Remove if flung far out of bounds
+        const margin = 300;
+        if (b.x < -margin || b.x > canvas.width + margin ||
+            b.y < -margin || b.y > canvas.height + margin) {
+          bodies.splice(i, 1);
+        }
+      }
+
+      // Update particle sparks
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= p.decay;
+        if (p.life <= 0) {
+          particles.splice(i, 1);
+        }
+      }
+
+      maintainAsteroidCount();
+    }
+
+    // --- DRAWING FUNCTIONS ---
+    function draw() {
+      // Background Space
+      ctx.fillStyle = '#0b0d1b';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw Twinkling Stars
+      for (const s of stars) {
+        s.alpha += s.speed;
+        const opacity = (Math.sin(s.alpha) + 1) / 2 * 0.8 + 0.2;
+        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Draw Central Sun
+      sun.pulse += 0.03;
+      const glowRadius = sun.radius + Math.sin(sun.pulse) * 4 + 8;
+
+      // Sun Outer Glow
+      const sunGlow = ctx.createRadialGradient(sun.x, sun.y, sun.radius * 0.5, sun.x, sun.y, glowRadius * 2);
+      sunGlow.addColorStop(0, 'rgba(251, 191, 36, 0.9)');
+      sunGlow.addColorStop(0.5, 'rgba(245, 158, 11, 0.4)');
+      sunGlow.addColorStop(1, 'rgba(217, 119, 6, 0)');
+
+      ctx.fillStyle = sunGlow;
+      ctx.beginPath();
+      ctx.arc(sun.x, sun.y, glowRadius * 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Sun Core Body
+      const sunGradient = ctx.createRadialGradient(sun.x - 8, sun.y - 8, 4, sun.x, sun.y, sun.radius);
+      sunGradient.addColorStop(0, '#fef08a');
+      sunGradient.addColorStop(0.7, '#f59e0b');
+      sunGradient.addColorStop(1, '#d97706');
+
+      ctx.fillStyle = sunGradient;
+      ctx.beginPath();
+      ctx.arc(sun.x, sun.y, sun.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Cheerful Sun Face for 1st Graders
+      ctx.fillStyle = '#78350f';
+      // Eyes
+      ctx.beginPath();
+      ctx.arc(sun.x - 10, sun.y - 6, 3.5, 0, Math.PI * 2);
+      ctx.arc(sun.x + 10, sun.y - 6, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      // Smile
+      ctx.beginPath();
+      ctx.arc(sun.x, sun.y + 2, 10, 0.1 * Math.PI, 0.9 * Math.PI);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#78350f';
+      ctx.stroke();
+
+      // Draw Motion Trails
+      for (const b of bodies) {
+        if (b.trail.length > 1) {
+          ctx.beginPath();
+          ctx.moveTo(b.trail[0].x, b.trail[0].y);
+          for (let t = 1; t < b.trail.length; t++) {
+            ctx.lineTo(b.trail[t].x, b.trail[t].y);
+          }
+          let trailColor = 'rgba(148, 163, 184, 0.3)';
+          if (b.type === 'earth') trailColor = 'rgba(56, 189, 248, 0.4)';
+          if (b.type === 'ship') trailColor = 'rgba(244, 63, 94, 0.4)';
+          if (b.type === 'asteroid') trailColor = 'rgba(156, 163, 175, 0.2)';
+
+          ctx.strokeStyle = trailColor;
+          ctx.lineWidth = b.type === 'earth' ? 2.5 : 1.5;
+          ctx.stroke();
+        }
+      }
+
+      // Draw Celestial Bodies
+      for (const b of bodies) {
+        ctx.save();
+        ctx.translate(b.x, b.y);
+
+        if (b.type === 'earth') {
+          // Atmosphere Glow
+          ctx.beginPath();
+          ctx.arc(0, 0, b.radius + 3, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+          ctx.fill();
+
+          // Oceans
+          ctx.beginPath();
+          ctx.arc(0, 0, b.radius, 0, Math.PI * 2);
+          ctx.fillStyle = '#0284c7';
+          ctx.fill();
+
+          // Continents (Green Patches)
+          ctx.fillStyle = '#22c55e';
+          ctx.beginPath();
+          ctx.arc(-4, -4, 6, 0, Math.PI * 2);
+          ctx.arc(5, 4, 7, 0, Math.PI * 2);
+          ctx.arc(-2, 7, 4, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Cloud Highlights
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+          ctx.beginPath();
+          ctx.arc(3, -7, 3, 0, Math.PI * 2);
+          ctx.arc(-6, 2, 4, 0, Math.PI * 2);
+          ctx.fill();
+
+        } else if (b.type === 'moon') {
+          // Moon Body
+          ctx.beginPath();
+          ctx.arc(0, 0, b.radius, 0, Math.PI * 2);
+          ctx.fillStyle = '#e2e8f0';
+          ctx.fill();
+
+          // Craters
+          ctx.fillStyle = '#cbd5e1';
+          ctx.beginPath();
+          ctx.arc(-1.5, -1.5, 1.5, 0, Math.PI * 2);
+          ctx.arc(2, 1, 1, 0, Math.PI * 2);
+          ctx.fill();
+
+        } else if (b.type === 'ship') {
+          ctx.rotate(b.angle + Math.PI / 2);
+
+          // Animated Rocket Thruster Flame
+          ctx.fillStyle = Math.random() < 0.5 ? '#f97316' : '#facc15';
+          ctx.beginPath();
+          ctx.moveTo(-4, 10);
+          ctx.lineTo(0, 18 + Math.random() * 6);
+          ctx.lineTo(4, 10);
+          ctx.closePath();
+          ctx.fill();
+
+          // Rocket Body
+          ctx.fillStyle = '#f43f5e'; // Red fins/tip
+          // Fins
+          ctx.beginPath();
+          ctx.moveTo(-9, 10);
+          ctx.lineTo(0, -12);
+          ctx.lineTo(9, 10);
+          ctx.fill();
+
+          // Main Capsule
+          ctx.fillStyle = '#f8fafc';
+          ctx.beginPath();
+          ctx.arc(0, 0, 7, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Cockpit Window
+          ctx.fillStyle = '#38bdf8';
+          ctx.beginPath();
+          ctx.arc(0, -2, 3, 0, Math.PI * 2);
+          ctx.fill();
+
+        } else if (b.type === 'asteroid') {
+          ctx.rotate(b.rotation);
+
+          // Jagged Asteroid Polygon
+          ctx.beginPath();
+          const verts = b.vertices;
+          for (let i = 0; i < verts.length; i++) {
+            const angle = (i / verts.length) * Math.PI * 2;
+            const r = b.radius * verts[i];
+            const vx = Math.cos(angle) * r;
+            const vy = Math.sin(angle) * r;
+            if (i === 0) ctx.moveTo(vx, vy);
+            else ctx.lineTo(vx, vy);
+          }
+          ctx.closePath();
+
+          ctx.fillStyle = '#6b7280';
+          ctx.fill();
+          ctx.strokeStyle = '#4b5563';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Asteroid Surface Crater
+          ctx.fillStyle = '#4b5563';
+          ctx.beginPath();
+          ctx.arc(-b.radius * 0.3, -b.radius * 0.2, b.radius * 0.25, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+
+      // Draw Particle Sparks
+      for (const p of particles) {
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+      }
+
+      // Update Cooldown UI Bar
+      updateCooldownUI();
+    }
+
+    // Cooldown UI Update
+    function updateCooldownUI() {
+      const badge = document.getElementById('cooldown-badge');
+      const text = document.getElementById('cooldown-text');
+      const fill = document.getElementById('cooldown-fill');
+
+      const elapsed = Date.now() - lastSpawnTime;
+      if (elapsed >= COOLDOWN_TIME) {
+        badge.classList.remove('charging');
+        text.innerText = "🚀 READY TO LAUNCH!";
+        fill.style.width = "100%";
+      } else {
+        badge.classList.add('charging');
+        const remaining = ((COOLDOWN_TIME - elapsed) / 1000).toFixed(1);
+        const percent = (elapsed / COOLDOWN_TIME) * 100;
+        text.innerText = `⏳ RECHARGING... (${remaining}s)`;
+        fill.style.width = `${percent}%`;
+      }
+    }
+
+    // Animation Loop
+    function animate() {
+      updatePhysics();
+      draw();
+      requestAnimationFrame(animate);
+    }
+
+    window.onload = function() {
+      resizeCanvas();
+      resetSpace();
+      animate();
+    };
+  </script>
+</body>
+</html>
