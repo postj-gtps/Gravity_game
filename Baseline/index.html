@@ -3,629 +3,212 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>✨ Cosmic Gravity Playground ✨</title>
-    <!-- Google Font for friendly rounded typography -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
-    <!-- Tailwind CSS for modern utility styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Gravity Physics Baseline</title>
     <style>
         * {
             box-sizing: border-box;
             user-select: none;
-            -webkit-user-select: none;
-            font-family: 'Fredoka', cursive, sans-serif;
+            margin: 0;
+            padding: 0;
+            font-family: 'Courier New', Courier, monospace, sans-serif;
         }
 
         body {
-            background-color: #050716;
+            background-color: #000000;
             color: #ffffff;
-            height: 100vh;
-            overflow: hidden;
             display: flex;
             flex-direction: column;
-            margin: 0;
-            padding: 0;
+            align-items: center;
+            justify-content: flex-start;
+            height: 100vh;
+            overflow: hidden;
+            padding: 16px;
         }
 
-        /* Gradient header text */
-        .rainbow-title {
-            background: linear-gradient(90deg, #ff7675, #fdcb6e, #55efc4, #74b9ff, #a29bfe);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+        /* Top Header Bar */
+        #header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 1100px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #ffffff;
         }
 
-        /* Glassmorphism control panel */
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.08);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.18);
+        h1 {
+            font-size: 18px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: bold;
         }
 
-        /* Custom glow buttons */
-        .btn-glow {
-            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+        .btn-reset {
+            background: transparent;
+            color: #ffffff;
+            border: 1px solid #ffffff;
+            padding: 6px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.15s ease-in-out;
         }
 
-        .btn-glow:hover {
-            transform: translateY(-2px) scale(1.03);
-            box-shadow: 0 6px 20px rgba(255, 118, 117, 0.4);
+        .btn-reset:hover {
+            background: #ffffff;
+            color: #000000;
         }
 
-        .btn-glow:active {
-            transform: translateY(1px) scale(0.97);
-        }
-
-        /* Canvas styling */
+        /* Main Canvas Container */
         #canvas-wrapper {
             position: relative;
             width: 100%;
+            max-width: 1100px;
             flex-grow: 1;
-            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         canvas {
+            background-color: #000000;
+            border: 1px solid #ffffff;
             display: block;
+            cursor: crosshair;
             width: 100%;
             height: 100%;
-            cursor: crosshair;
         }
 
-        /* Animated launch hint banner */
-        .floating-hint {
-            animation: bounce 2s infinite;
-        }
-
-        @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-8px); }
+        .instructions {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #888888;
+            text-align: center;
         }
     </style>
 </head>
-<body class="flex flex-col h-screen select-none">
+<body>
 
-    <!-- Top Control Header -->
-    <header class="px-4 py-3 glass-panel z-10 flex flex-wrap justify-between items-center gap-3 border-b border-white/10">
-        <div class="flex items-center gap-3">
-            <span class="text-3xl animate-bounce">🚀</span>
-            <div>
-                <h1 class="text-xl sm:text-2xl font-bold rainbow-title tracking-wide">Cosmic Gravity Playground</h1>
-                <p class="text-xs text-purple-200 opacity-80 hidden sm:block">Click anywhere to launch 1 Rocket & 4 Planets into stable orbit!</p>
-            </div>
-        </div>
-
-        <!-- Dynamic Counter & Action Controls -->
-        <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
-            <!-- Active Counter Badge -->
-            <div class="glass-panel px-3 py-1.5 rounded-full flex items-center gap-2 border border-purple-400/30">
-                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span class="text-xs sm:text-sm font-semibold text-purple-100">
-                    Planets & Rockets: <span id="count-display" class="text-yellow-300 font-bold text-base">0</span> / 30
-                </span>
-            </div>
-
-            <!-- Gravity Mode Preset Selector -->
-            <div class="hidden md:flex items-center gap-1 bg-black/40 p-1 rounded-xl text-xs font-semibold border border-white/10">
-                <button onclick="setGravity('super')" id="grav-super" class="px-2.5 py-1 rounded-lg text-gray-300 hover:text-white transition">Super Pull</button>
-                <button onclick="setGravity('normal')" id="grav-normal" class="px-2.5 py-1 rounded-lg bg-purple-600 text-white shadow">Normal Orbit</button>
-                <button onclick="setGravity('float')" id="grav-float" class="px-2.5 py-1 rounded-lg text-gray-300 hover:text-white transition">Float G</button>
-            </div>
-
-            <!-- Audio Mute Toggle Button -->
-            <button onclick="toggleAudio()" id="btn-audio" class="btn-glow bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-xl text-xs sm:text-sm flex items-center justify-center border border-white/15">
-                <span id="audio-icon">🔊</span>
-            </button>
-
-            <!-- Spread Launch Button -->
-            <button onclick="burstRandomLaunch()" class="btn-glow bg-gradient-to-r from-pink-500 to-purple-600 text-white px-3 py-1.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-1">
-                <span>✨</span> Random Launch
-            </button>
-
-            <!-- Reset Button -->
-            <button onclick="resetSimulation()" class="btn-glow bg-gradient-to-r from-red-500 to-amber-500 text-white px-3 py-1.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-1">
-                <span>🔄</span> Reset
-            </button>
-        </div>
-    </header>
-
-    <!-- Main Canvas Area -->
-    <div id="canvas-wrapper" class="relative">
-        <canvas id="simCanvas"></canvas>
-
-        <!-- Floating Launch Helper Banner -->
-        <div id="hint-banner" class="floating-hint absolute bottom-5 left-1/2 -translate-x-1/2 pointer-events-none glass-panel px-4 py-2 rounded-full text-xs sm:text-sm text-yellow-200 font-semibold border border-yellow-400/40 shadow-xl flex items-center gap-2">
-            <span>👇</span> Tap or click anywhere to launch 1 Rocket & 4 Planets into orbit!
-        </div>
+    <!-- Header Section -->
+    <div id="header">
+        <h1>Gravity Simulation</h1>
+        <button class="btn-reset" onclick="resetSimulation()">Reset</button>
     </div>
 
-    <!-- Solar System Legend Bar -->
-    <footer class="px-3 py-2 bg-slate-950/90 border-t border-white/10 text-xs text-gray-300 flex items-center justify-between overflow-x-auto gap-4 whitespace-nowrap">
-        <div class="flex items-center gap-3">
-            <span class="font-bold text-yellow-400">Planet Mass Legend:</span>
-            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span> Rocket (0.5)</span>
-            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-slate-300 inline-block"></span> Mercury (0.7)</span>
-            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span> Venus (1.5)</span>
-            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-400 inline-block"></span> Earth (2.0)</span>
-            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block"></span> Mars (1.2)</span>
-            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-600 inline-block"></span> Jupiter (5.0)</span>
-            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-yellow-300 inline-block"></span> Saturn (4.0)</span>
-            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-cyan-300 inline-block"></span> Uranus (3.0)</span>
-            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block"></span> Neptune (3.2)</span>
-            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-purple-300 inline-block"></span> Pluto (0.3)</span>
-        </div>
-        <div class="text-purple-300 text-[11px] font-semibold">
-            ⭐ Auto-trims when exceeding 30 objects
-        </div>
-    </footer>
+    <!-- Canvas Container -->
+    <div id="canvas-wrapper">
+        <canvas id="simCanvas"></canvas>
+    </div>
+
+    <div class="instructions">
+        Click anywhere on the canvas to launch a ball.
+    </div>
 
     <script>
-        // DOM Elements
         const canvas = document.getElementById('simCanvas');
         const ctx = canvas.getContext('2d');
-        const countDisplay = document.getElementById('count-display');
-        const hintBanner = document.getElementById('hint-banner');
-        const audioIcon = document.getElementById('audio-icon');
 
-        // WEB AUDIO API SYNTHESIZER
-        class KidSoundSynth {
-            constructor() {
-                this.ctx = null;
-                this.muted = false;
-            }
+        // SIMULATION CONSTANTS
+        const GRAVITY_CONSTANT = 1800;    // Strength of gravitational pull (G)
+        const LAUNCH_VELOCITY = 5;         // Fixed velocity on click
+        const FIXED_LAUNCH_ANGLE = 90;     // Fixed direction in degrees (90° = straight right)
+        const TRAIL_LENGTH = 300;         // Number of historic trail points stored
+        const SOFTENING_FACTOR = 400;     // Prevents infinite velocity near center
 
-            init() {
-                if (!this.ctx) {
-                    const AudioContext = window.AudioContext || window.webkitAudioContext;
-                    this.ctx = new AudioContext();
-                }
-                if (this.ctx.state === 'suspended') {
-                    this.ctx.resume();
-                }
-            }
+        // STATE VARIABLES
+        let balls = [];
 
-            playLaunch() {
-                if (this.muted) return;
-                this.init();
-                const now = this.ctx.currentTime;
-                
-                // Arpeggio chords (C5, E5, G5, B5, C6)
-                const freqs = [523.25, 659.25, 783.99, 987.77, 1046.50];
-                freqs.forEach((freq, idx) => {
-                    const osc = this.ctx.createOscillator();
-                    const gain = this.ctx.createGain();
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime(freq, now + idx * 0.04);
-                    
-                    gain.gain.setValueAtTime(0.08, now + idx * 0.04);
-                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.04 + 0.25);
-
-                    osc.connect(gain);
-                    gain.connect(this.ctx.destination);
-
-                    osc.start(now + idx * 0.04);
-                    osc.stop(now + idx * 0.04 + 0.25);
-                });
-            }
-
-            playSunSplash() {
-                if (this.muted) return;
-                this.init();
-                const now = this.ctx.currentTime;
-
-                // Splash pop sound
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(800, now);
-                osc.frequency.exponentialRampToValueAtTime(200, now + 0.2);
-
-                gain.gain.setValueAtTime(0.18, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-
-                osc.start(now);
-                osc.stop(now + 0.2);
-            }
-
-            playPreset() {
-                if (this.muted) return;
-                this.init();
-                const now = this.ctx.currentTime;
-
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(440, now);
-                osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
-
-                gain.gain.setValueAtTime(0.1, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-
-                osc.start(now);
-                osc.stop(now + 0.12);
-            }
-
-            playReset() {
-                if (this.muted) return;
-                this.init();
-                const now = this.ctx.currentTime;
-
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(400, now);
-                osc.frequency.exponentialRampToValueAtTime(100, now + 0.25);
-
-                gain.gain.setValueAtTime(0.12, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-
-                osc.start(now);
-                osc.stop(now + 0.25);
-            }
-        }
-
-        const soundSynth = new KidSoundSynth();
-
-        function toggleAudio() {
-            soundSynth.muted = !soundSynth.muted;
-            audioIcon.innerText = soundSynth.muted ? '🔇' : '🔊';
-        }
-
-        // SIMULATION PHYSICS CONSTANTS
-        let GRAVITY_CONSTANT = 5000;  // Strong tuned gravitational pull
-        const SOFTENING_FACTOR = 800; // Prevents extreme slingshots at center
-        const MAX_OBJECTS = 30;       // Max objects onscreen constraint
-        const TRAIL_LENGTH = 50;      // Number of path history points for rainbow tail
-
-        // Central Mass (The Sun)
+        // Central Gravity Node Definition
         const centralNode = {
             x: 0,
             y: 0,
-            radius: 36,
-            scalePulse: 1.0
+            radius: 12
         };
-
-        // Solar System Planet Types with Relative Masses & Visual Features
-        const PLANET_TYPES = [
-            { name: 'Mercury', mass: 0.7, radius: 8, color: '#d1ccc0', ring: false, details: 'rock' },
-            { name: 'Venus', mass: 1.5, radius: 11, color: '#f7b731', ring: false, details: 'atmosphere' },
-            { name: 'Earth', mass: 2.0, radius: 13, color: '#45aaf2', ring: false, details: 'earth' },
-            { name: 'Mars', mass: 1.2, radius: 10, color: '#fc5c65', ring: false, details: 'mars' },
-            { name: 'Jupiter', mass: 5.0, radius: 23, color: '#e58e26', ring: false, details: 'jupiter' },
-            { name: 'Saturn', mass: 4.0, radius: 18, color: '#f6b93b', ring: true, ringColor: '#fad390', details: 'saturn' },
-            { name: 'Uranus', mass: 3.0, radius: 15, color: '#00d2d3', ring: true, ringColor: '#81ecec', details: 'uranus' },
-            { name: 'Neptune', mass: 3.2, radius: 15, color: '#3867d6', ring: false, details: 'storm' },
-            { name: 'Pluto', mass: 0.3, radius: 7, color: '#a5b1c2', ring: false, details: 'pluto' }
-        ];
-
-        const ROCKET_TYPE = {
-            name: 'Rocket',
-            mass: 0.5,
-            radius: 12,
-            color: '#ff4d4d',
-            isRocket: true
-        };
-
-        // SIMULATION STATE ARRAYS
-        let balls = [];
-        let stars = [];
-        let comets = [];
-        let nebulae = [];
-        let particles = [];
-        let globalFrame = 0;
-
-        // Initialize Background Stars & Nebulae
-        function initBackground() {
-            stars = [];
-            nebulae = [];
-
-            // 180+ Twinkling multi-colored stars
-            const numStars = Math.floor((canvas.width * canvas.height) / 3800);
-            const starColors = ['#ffffff', '#fff5cc', '#cce0ff', '#ffe6ff', '#e6ffff', '#fdcb6e'];
-            for (let i = 0; i < numStars; i++) {
-                stars.push({
-                    x: Math.random() * canvas.width,
-                    y: Math.random() * canvas.height,
-                    radius: Math.random() * 2 + 0.4,
-                    color: starColors[Math.floor(Math.random() * starColors.length)],
-                    phase: Math.random() * Math.PI * 2,
-                    speed: 0.02 + Math.random() * 0.05
-                });
-            }
-
-            // Soft glowing space nebulae
-            nebulae = [
-                { x: canvas.width * 0.2, y: canvas.height * 0.3, radius: 260, color: 'rgba(155, 89, 182, 0.14)' },
-                { x: canvas.width * 0.8, y: canvas.height * 0.7, radius: 320, color: 'rgba(52, 152, 219, 0.12)' },
-                { x: canvas.width * 0.75, y: canvas.height * 0.2, radius: 240, color: 'rgba(231, 76, 60, 0.09)' },
-                { x: canvas.width * 0.25, y: canvas.height * 0.8, radius: 280, color: 'rgba(46, 204, 113, 0.08)' }
-            ];
-        }
 
         function resizeCanvas() {
             const wrapper = document.getElementById('canvas-wrapper');
             canvas.width = wrapper.clientWidth;
             canvas.height = wrapper.clientHeight;
-
+            
+            // Recenter gravity node dynamically
             centralNode.x = canvas.width / 2;
             centralNode.y = canvas.height / 2;
-
-            initBackground();
         }
 
         window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
 
-        // Click / Touch Launch Pointer Handler
-        function handlePointerLaunch(clientX, clientY) {
+        // Canvas Click Handler: Directly launch ball at click position
+        canvas.addEventListener('click', (e) => {
             const rect = canvas.getBoundingClientRect();
-            const clickX = clientX - rect.left;
-            const clickY = clientY - rect.top;
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
 
-            // Prevent launches directly on top of the Sun core
-            const dx = clickX - centralNode.x;
-            const dy = clickY - centralNode.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < centralNode.radius + 15) return;
-
-            launchSpread(clickX, clickY);
-
-            // Fade out initial hint banner on first launch
-            if (hintBanner) {
-                hintBanner.style.opacity = '0';
-                setTimeout(() => hintBanner.remove(), 500);
-            }
-        }
-
-        canvas.addEventListener('pointerdown', (e) => {
-            handlePointerLaunch(e.clientX, e.clientY);
+            launchBall(clickX, clickY);
         });
 
-        // TANGENTIAL VELOCITY & ORBITAL CALCULATOR (Fixes objects flying away)
-        function launchSpread(clickX, clickY) {
-            soundSynth.playLaunch();
+        function launchBall(x, y) {
+            // Fixed launch direction: 90° (0° = UP, 90° = RIGHT, 180° = DOWN, 270° = LEFT)
+            const rad = (FIXED_LAUNCH_ANGLE * Math.PI) / 180;
+            const vx = LAUNCH_VELOCITY * Math.sin(rad);  // sin(90°) = 1  -> vx = 5
+            const vy = -LAUNCH_VELOCITY * Math.cos(rad); // cos(90°) = 0  -> vy = 0
 
-            // Pick 1 Rocket + 4 Random unique planets
-            const chosenTypes = [ROCKET_TYPE];
-            const shuffledPlanets = [...PLANET_TYPES].sort(() => Math.random() - 0.5);
-            for (let i = 0; i < 4; i++) {
-                chosenTypes.push(shuffledPlanets[i]);
-            }
-
-            // 1. Compute radial vector from click position to Central Sun
-            const dx = centralNode.x - clickX;
-            const dy = centralNode.y - clickY;
-            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-
-            // 2. Compute angle to center
-            const angleToSun = Math.atan2(dy, dx);
-
-            // 3. Compute tangential direction angle (perpendicular to radial line)
-            // Alternate clockwise or counterclockwise orbit launch
-            const orbitDir = (Math.random() > 0.5 ? 1 : -1);
-            const tangentAngle = angleToSun + (orbitDir * Math.PI / 2);
-
-            // 4. Theoretical circular velocity formula: v_circ = sqrt(G / dist)
-            // We tune velocity slightly below circular speed (0.82 - 0.94) so objects fall into stable ellipses
-            const G = GRAVITY_CONSTANT;
-            const idealCircularSpeed = Math.sqrt(G / (dist + 40));
-            const baseVelocity = idealCircularSpeed * 0.88;
-
-            // 5. Fan arc angle offsets for 5 objects (-35°, -17.5°, 0°, +17.5°, +35°)
-            const spreadAngles = [-0.60, -0.30, 0, 0.30, 0.60];
-
-            // PRUNING: Enforce strict onscreen object cap (Max 30)
-            while (balls.length + 5 > MAX_OBJECTS) {
-                balls.shift(); // Remove oldest objects first
-            }
-
-            // 6. Spawn the 5 objects in fan formation
-            chosenTypes.forEach((type, index) => {
-                const launchAngle = tangentAngle + spreadAngles[index];
-
-                // Relative mass scaling: heavier objects have slightly larger orbital momentum
-                const massSpeedScale = Math.pow(2.0 / type.mass, 0.25);
-                const finalSpeed = Math.min(Math.max(baseVelocity * massSpeedScale * (0.92 + Math.random() * 0.16), 2.5), 10.5);
-
-                const vx = Math.cos(launchAngle) * finalSpeed;
-                const vy = Math.sin(launchAngle) * finalSpeed;
-
-                balls.push({
-                    x: clickX + (Math.random() - 0.5) * 10,
-                    y: clickY + (Math.random() - 0.5) * 10,
-                    vx: vx,
-                    vy: vy,
-                    mass: type.mass,
-                    radius: type.radius,
-                    color: type.color,
-                    name: type.name,
-                    isRocket: type.isRocket || false,
-                    ring: type.ring || false,
-                    ringColor: type.ringColor || '#ffffff',
-                    details: type.details || '',
-                    trail: [],
-                    hueOffset: Math.random() * 360
-                });
-            });
-
-            updateCounterUI();
-        }
-
-        // Action: Random Spread Launch Button
-        function burstRandomLaunch() {
-            // Pick random position in nice orbital distance range
-            const angle = Math.random() * Math.PI * 2;
-            const minDim = Math.min(canvas.width, canvas.height);
-            const radius = minDim * 0.22 + Math.random() * minDim * 0.22;
-
-            const rx = centralNode.x + Math.cos(angle) * radius;
-            const ry = centralNode.y + Math.sin(angle) * radius;
-
-            launchSpread(rx, ry);
-        }
-
-        // Action: Gravity Mode Presets
-        function setGravity(level) {
-            document.querySelectorAll('[id^="grav-"]').forEach(btn => {
-                btn.classList.remove('bg-purple-600', 'text-white', 'shadow');
-                btn.classList.add('text-gray-300');
-            });
-
-            const activeBtn = document.getElementById(`grav-${level}`);
-            if (activeBtn) {
-                activeBtn.classList.add('bg-purple-600', 'text-white', 'shadow');
-                activeBtn.classList.remove('text-gray-300');
-            }
-
-            if (level === 'super') GRAVITY_CONSTANT = 8500;
-            if (level === 'normal') GRAVITY_CONSTANT = 5000;
-            if (level === 'float') GRAVITY_CONSTANT = 2200;
-
-            soundSynth.playPreset();
+            // Overwrite existing array to strictly maintain a single ball on screen
+            balls = [{
+                x: x,
+                y: y,
+                vx: vx,
+                vy: vy,
+                radius: 4,
+                trail: [] // Stores history of past {x, y} coordinates
+            }];
         }
 
         function resetSimulation() {
             balls = [];
-            particles = [];
-            updateCounterUI();
-            soundSynth.playReset();
         }
 
-        function updateCounterUI() {
-            countDisplay.innerText = balls.length;
-        }
-
-        // Spawn ambient comets periodically in background
-        function updateComets() {
-            if (Math.random() < 0.006 && comets.length < 2) {
-                const startSide = Math.floor(Math.random() * 4);
-                let cx, cy, cvx, cvy;
-
-                if (startSide === 0) { // Top
-                    cx = Math.random() * canvas.width; cy = -20;
-                    cvx = (Math.random() - 0.5) * 4; cvy = 3 + Math.random() * 3;
-                } else { // Left
-                    cx = -20; cy = Math.random() * canvas.height;
-                    cvx = 3 + Math.random() * 3; cvy = (Math.random() - 0.5) * 4;
-                }
-
-                comets.push({
-                    x: cx, y: cy, vx: cvx, vy: cvy,
-                    size: 3.5 + Math.random() * 2,
-                    trail: []
-                });
-            }
-
-            for (let i = comets.length - 1; i >= 0; i--) {
-                const c = comets[i];
-                c.x += c.vx;
-                c.y += c.vy;
-
-                c.trail.push({ x: c.x, y: c.y });
-                if (c.trail.length > 25) c.trail.shift();
-
-                if (c.x > canvas.width + 120 || c.y > canvas.height + 120 || c.x < -120 || c.y < -120) {
-                    comets.splice(i, 1);
-                }
-            }
-        }
-
-        // Particle Bursts on Sun Collisions
-        function createSunSplash(x, y, color) {
-            soundSynth.playSunSplash();
-            centralNode.scalePulse = 1.35; // Sun momentary pulse animation
-
-            for (let i = 0; i < 28; i++) {
-                const pAngle = Math.random() * Math.PI * 2;
-                const pSpeed = 2 + Math.random() * 6;
-                particles.push({
-                    x: x,
-                    y: y,
-                    vx: Math.cos(pAngle) * pSpeed,
-                    vy: Math.sin(pAngle) * pSpeed,
-                    radius: 2 + Math.random() * 3.5,
-                    color: color || '#fdcb6e',
-                    alpha: 1.0,
-                    life: 1.0
-                });
-            }
-        }
-
-        function updateParticles() {
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const p = particles[i];
-                p.x += p.vx;
-                p.y += p.vy;
-                p.alpha -= 0.025;
-
-                if (p.alpha <= 0) {
-                    particles.splice(i, 1);
-                }
-            }
-        }
-
-        // ORBITAL PHYSICS LOOP
         function updatePhysics() {
-            // Pulse decay on Central Sun
-            if (centralNode.scalePulse > 1.0) {
-                centralNode.scalePulse -= 0.015;
-            }
-
             for (let i = balls.length - 1; i >= 0; i--) {
                 const b = balls[i];
 
-                // Soft screen-edge retention force: gently bend objects back if they stray into outer space
-                const edgeMargin = 100;
-                if (b.x < edgeMargin || b.x > canvas.width - edgeMargin ||
-                    b.y < edgeMargin || b.y > canvas.height - edgeMargin) {
-                    const steerX = centralNode.x - b.x;
-                    const steerY = centralNode.y - b.y;
-                    const steerDist = Math.sqrt(steerX * steerX + steerY * steerY) || 1;
-                    b.vx += (steerX / steerDist) * 0.18;
-                    b.vy += (steerY / steerDist) * 0.18;
+                // Remove ball if it travels too far off-screen (prevents memory leak)
+                const margin = 500;
+                if (b.x < -margin || b.x > canvas.width + margin || 
+                    b.y < -margin || b.y > canvas.height + margin) {
+                    balls.splice(i, 1);
+                    continue;
                 }
 
-                // Vector towards Sun
+                // Distance vector to central gravity node
                 const dx = centralNode.x - b.x;
                 const dy = centralNode.y - b.y;
                 const distSq = dx * dx + dy * dy;
                 const dist = Math.sqrt(distSq);
 
-                // Collision with Central Sun
-                if (dist < centralNode.radius + b.radius * 0.7) {
-                    createSunSplash(b.x, b.y, b.color);
+                // Absorption check: ball collides with central mass
+                if (dist < centralNode.radius + b.radius) {
                     balls.splice(i, 1);
-                    updateCounterUI();
                     continue;
                 }
 
-                // Gravitational acceleration: a = G / (r^2 + softening)
-                // Inversely scaled with mass^0.35 so heavier objects have smooth inertia
-                const massFactor = Math.pow(b.mass, 0.35);
-                const acceleration = (GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR)) / massFactor;
+                // Inverse square law gravity acceleration
+                const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
 
+                // Acceleration vector components
                 const ax = acceleration * (dx / dist);
                 const ay = acceleration * (dy / dist);
 
+                // Update velocity and position
                 b.vx += ax;
                 b.vy += ay;
                 b.x += b.vx;
                 b.y += b.vy;
 
-                // Record position history for rainbow trail
+                // Record position history for line trail
                 b.trail.push({ x: b.x, y: b.y });
                 if (b.trail.length > TRAIL_LENGTH) {
                     b.trail.shift();
@@ -633,339 +216,52 @@
             }
         }
 
-        // RENDERING ENGINE
-        function drawBackground() {
-            // Deep cosmic gradient
-            const bgGradient = ctx.createRadialGradient(
-                canvas.width / 2, canvas.height / 2, 80,
-                canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height)
-            );
-            bgGradient.addColorStop(0, '#0f1438');
-            bgGradient.addColorStop(0.55, '#07091f');
-            bgGradient.addColorStop(1, '#02030a');
-
-            ctx.fillStyle = bgGradient;
+        function draw() {
+            // Clear canvas background
+            ctx.fillStyle = '#000000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Draw Glowing Nebulae
-            nebulae.forEach(n => {
-                const grad = ctx.createRadialGradient(n.x, n.y, 10, n.x, n.y, n.radius);
-                grad.addColorStop(0, n.color);
-                grad.addColorStop(1, 'transparent');
-                ctx.fillStyle = grad;
-                ctx.beginPath();
-                ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
-                ctx.fill();
-            });
-
-            // Draw Twinkling Stars
-            stars.forEach(s => {
-                s.phase += s.speed;
-                const alpha = 0.35 + Math.sin(s.phase) * 0.45 + 0.2;
-                ctx.beginPath();
-                ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
-                ctx.fillStyle = s.color;
-                ctx.globalAlpha = alpha;
-                ctx.fill();
-            });
-            ctx.globalAlpha = 1.0;
-
-            // Draw Comets
-            comets.forEach(c => {
-                if (c.trail.length > 1) {
-                    ctx.beginPath();
-                    ctx.moveTo(c.trail[0].x, c.trail[0].y);
-                    for (let t = 1; t < c.trail.length; t++) {
-                        ctx.lineTo(c.trail[t].x, c.trail[t].y);
-                    }
-                    const gradient = ctx.createLinearGradient(
-                        c.trail[0].x, c.trail[0].y, c.x, c.y
-                    );
-                    gradient.addColorStop(0, 'rgba(0, 212, 255, 0)');
-                    gradient.addColorStop(1, 'rgba(255, 255, 255, 0.95)');
-                    ctx.strokeStyle = gradient;
-                    ctx.lineWidth = c.size;
-                    ctx.stroke();
-                }
-
-                ctx.beginPath();
-                ctx.arc(c.x, c.y, c.size + 1, 0, Math.PI * 2);
-                ctx.fillStyle = '#ffffff';
-                ctx.shadowColor = '#00d2d3';
-                ctx.shadowBlur = 12;
-                ctx.fill();
-                ctx.shadowBlur = 0;
-            });
-        }
-
-        // Draw Central Smiling Sun
-        function drawSun() {
-            const sunX = centralNode.x;
-            const sunY = centralNode.y;
-            const sunR = centralNode.radius * centralNode.scalePulse;
-
-            // Pulsing Corona Rays Glow
-            const pulse = Math.sin(globalFrame * 0.07) * 5;
-            const sunGlow = ctx.createRadialGradient(sunX, sunY, sunR * 0.3, sunX, sunY, sunR + 32 + pulse);
-            sunGlow.addColorStop(0, 'rgba(255, 234, 167, 1)');
-            sunGlow.addColorStop(0.45, 'rgba(253, 203, 110, 0.65)');
-            sunGlow.addColorStop(1, 'rgba(225, 112, 85, 0)');
-
-            ctx.fillStyle = sunGlow;
+            // 1. Draw Central Mass Node
             ctx.beginPath();
-            ctx.arc(sunX, sunY, sunR + 35 + pulse, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Core Sun Sphere
-            ctx.beginPath();
-            ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
-            ctx.fillStyle = '#ffeaa7';
-            ctx.fill();
-
-            // Friendly Cute Face
-            const eyeOffset = sunR * 0.3;
-            ctx.fillStyle = '#2d3436';
-            
-            // Eyes
-            ctx.beginPath();
-            ctx.arc(sunX - eyeOffset, sunY - 4, 3.8, 0, Math.PI * 2);
-            ctx.arc(sunX + eyeOffset, sunY - 4, 3.8, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Eye Shine Dots
+            ctx.arc(centralNode.x, centralNode.y, centralNode.radius, 0, Math.PI * 2);
             ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(sunX - eyeOffset - 1, sunY - 5.5, 1.3, 0, Math.PI * 2);
-            ctx.arc(sunX + eyeOffset - 1, sunY - 5.5, 1.3, 0, Math.PI * 2);
             ctx.fill();
 
-            // Blushing Cheeks
-            ctx.fillStyle = 'rgba(255, 118, 117, 0.7)';
+            // Center mark on node
             ctx.beginPath();
-            ctx.arc(sunX - eyeOffset - 4, sunY + 4, 4.5, 0, Math.PI * 2);
-            ctx.arc(sunX + eyeOffset + 4, sunY + 4, 4.5, 0, Math.PI * 2);
+            ctx.arc(centralNode.x, centralNode.y, 2, 0, Math.PI * 2);
+            ctx.fillStyle = '#000000';
             ctx.fill();
 
-            // Happy Smile
-            ctx.beginPath();
-            ctx.arc(sunX, sunY + 2, sunR * 0.38, 0.1 * Math.PI, 0.9 * Math.PI, false);
-            ctx.lineWidth = 2.8;
-            ctx.strokeStyle = '#2d3436';
-            ctx.stroke();
-        }
+            // 2. Draw Ball & Trail
+            for (const b of balls) {
+                // Draw path line
+                if (b.trail.length > 1) {
+                    ctx.beginPath();
+                    ctx.moveTo(b.trail[0].x, b.trail[0].y);
+                    for (let t = 1; t < b.trail.length; t++) {
+                        ctx.lineTo(b.trail[t].x, b.trail[t].y);
+                    }
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1.2;
+                    ctx.stroke();
+                }
 
-        // Draw Multi-Hue Rainbow Trail
-        function drawRainbowTrail(b) {
-            if (b.trail.length < 2) return;
-
-            for (let t = 0; t < b.trail.length - 1; t++) {
-                const p1 = b.trail[t];
-                const p2 = b.trail[t + 1];
-
-                const progress = t / b.trail.length; // 0 (oldest) to 1 (newest)
-                
-                // Dynamic cascading rainbow spectrum hue along trajectory
-                const hue = (t * 9 + globalFrame * 4 + b.hueOffset) % 360;
-
+                // Draw ball object
                 ctx.beginPath();
-                ctx.moveTo(p1.x, p1.y);
-                ctx.lineTo(p2.x, p2.y);
-                
-                ctx.strokeStyle = `hsla(${hue}, 100%, 65%, ${progress * 0.85})`;
-                ctx.lineWidth = Math.max(1.8, progress * (b.radius * 0.8));
-                ctx.lineCap = 'round';
-                ctx.stroke();
-            }
-        }
-
-        // Draw Space Objects (Rocket & Planets)
-        function drawSpaceObject(b) {
-            ctx.save();
-            ctx.translate(b.x, b.y);
-
-            if (b.isRocket) {
-                // Rocket Ship rendering
-                const angle = Math.atan2(b.vy, b.vx) + Math.PI / 2;
-                ctx.rotate(angle);
-
-                // Animated Thruster Flame
-                const flameHeight = 9 + Math.random() * 7;
-                ctx.beginPath();
-                ctx.moveTo(-4, 11);
-                ctx.lineTo(0, 11 + flameHeight);
-                ctx.lineTo(4, 11);
-                ctx.fillStyle = Math.random() > 0.5 ? '#fffa65' : '#ffaf40';
-                ctx.fill();
-
-                // Rocket Body
-                ctx.beginPath();
-                ctx.moveTo(0, -15);
-                ctx.quadraticCurveTo(8, -2, 7, 11);
-                ctx.lineTo(-7, 11);
-                ctx.quadraticCurveTo(-8, -2, 0, -15);
+                ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
                 ctx.fillStyle = '#ffffff';
                 ctx.fill();
-
-                // Nose Cone
-                ctx.beginPath();
-                ctx.moveTo(0, -15);
-                ctx.quadraticCurveTo(5, -7, 5, -3);
-                ctx.lineTo(-5, -3);
-                ctx.quadraticCurveTo(-5, -7, 0, -15);
-                ctx.fillStyle = '#ff4d4d';
-                ctx.fill();
-
-                // Fins
-                ctx.fillStyle = '#ff4d4d';
-                ctx.beginPath();
-                ctx.moveTo(-7, 5);
-                ctx.lineTo(-13, 12);
-                ctx.lineTo(-7, 11);
-                ctx.fill();
-
-                ctx.beginPath();
-                ctx.moveTo(7, 5);
-                ctx.lineTo(13, 12);
-                ctx.lineTo(7, 11);
-                ctx.fill();
-
-                // Window Porthole
-                ctx.beginPath();
-                ctx.arc(0, 1, 3.8, 0, Math.PI * 2);
-                ctx.fillStyle = '#17c0eb';
-                ctx.fill();
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 1.2;
-                ctx.stroke();
-
-            } else {
-                // Planets Rendering
-
-                // Ringed planets (Saturn / Uranus back ring segment)
-                if (b.ring) {
-                    ctx.save();
-                    ctx.rotate(-0.35);
-                    ctx.beginPath();
-                    ctx.ellipse(0, 0, b.radius * 1.85, b.radius * 0.5, 0, 0, Math.PI * 2);
-                    ctx.strokeStyle = b.ringColor;
-                    ctx.lineWidth = 3.5;
-                    ctx.stroke();
-                    ctx.restore();
-                }
-
-                // Planet Sphere
-                ctx.beginPath();
-                ctx.arc(0, 0, b.radius, 0, Math.PI * 2);
-                ctx.fillStyle = b.color;
-                ctx.fill();
-
-                // Custom Planet Surface Details
-                if (b.details === 'jupiter') {
-                    ctx.fillStyle = 'rgba(120, 60, 20, 0.35)';
-                    ctx.fillRect(-b.radius + 2, -4, b.radius * 2 - 4, 3.2);
-                    ctx.fillRect(-b.radius + 3, 3, b.radius * 2 - 6, 2.5);
-
-                    // Great Red Spot
-                    ctx.beginPath();
-                    ctx.arc(b.radius * 0.35, b.radius * 0.3, 3.8, 0, Math.PI * 2);
-                    ctx.fillStyle = '#eb4d4b';
-                    ctx.fill();
-
-                } else if (b.details === 'earth') {
-                    // Earth continents patches
-                    ctx.fillStyle = '#26de81';
-                    ctx.beginPath();
-                    ctx.arc(-b.radius * 0.3, -b.radius * 0.2, b.radius * 0.45, 0, Math.PI * 2);
-                    ctx.arc(b.radius * 0.3, b.radius * 0.3, b.radius * 0.38, 0, Math.PI * 2);
-                    ctx.fill();
-
-                } else if (b.details === 'mars') {
-                    // Mars ice cap & crater
-                    ctx.fillStyle = '#ffffff';
-                    ctx.beginPath();
-                    ctx.arc(0, -b.radius + 2.5, 3, 0, Math.PI * 2);
-                    ctx.fill();
-
-                } else if (b.details === 'pluto') {
-                    // Heart feature
-                    ctx.fillStyle = '#ffffff';
-                    ctx.beginPath();
-                    ctx.arc(-1.5, 0, 2, 0, Math.PI * 2);
-                    ctx.arc(1.5, 0, 2, 0, Math.PI * 2);
-                    ctx.fill();
-
-                } else if (b.details === 'rock') {
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
-                    ctx.beginPath();
-                    ctx.arc(-b.radius * 0.3, -b.radius * 0.2, 2.2, 0, Math.PI * 2);
-                    ctx.arc(b.radius * 0.25, b.radius * 0.35, 1.8, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-
-                // 3D Sphere Lighting Shadow Overlay
-                const shadowGrad = ctx.createRadialGradient(
-                    -b.radius * 0.35, -b.radius * 0.35, b.radius * 0.1,
-                    0, 0, b.radius
-                );
-                shadowGrad.addColorStop(0, 'rgba(255, 255, 255, 0.28)');
-                shadowGrad.addColorStop(0.75, 'rgba(0, 0, 0, 0.08)');
-                shadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
-                ctx.beginPath();
-                ctx.arc(0, 0, b.radius, 0, Math.PI * 2);
-                ctx.fillStyle = shadowGrad;
-                ctx.fill();
-            }
-
-            ctx.restore();
-        }
-
-        // Particles Render
-        function drawParticles() {
-            particles.forEach(p => {
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-                ctx.fillStyle = p.color;
-                ctx.globalAlpha = Math.max(0, p.alpha);
-                ctx.fill();
-            });
-            ctx.globalAlpha = 1.0;
-        }
-
-        // MAIN ANIMATION LOOP
-        function draw() {
-            globalFrame++;
-
-            // 1. Background & Comets
-            drawBackground();
-
-            // 2. Central Sun
-            drawSun();
-
-            // 3. Collision Particle Explosions
-            drawParticles();
-
-            // 4. Rainbow Trails (rendered underneath objects)
-            for (const b of balls) {
-                drawRainbowTrail(b);
-            }
-
-            // 5. Physics Space Objects
-            for (const b of balls) {
-                drawSpaceObject(b);
             }
         }
 
         function animate() {
-            updateComets();
-            updateParticles();
             updatePhysics();
             draw();
             requestAnimationFrame(animate);
         }
 
-        // Window Load Initialization
         window.onload = function() {
-            resizeCanvas();
             animate();
         };
     </script>
