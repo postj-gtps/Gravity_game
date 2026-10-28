@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>1st Grade Space & Gravity Simulator</title>
-    <!-- Tailwind CSS CDN -->
+    <!-- Tailwind CSS CDN for HUD Layout -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         * {
@@ -26,10 +26,6 @@
         /* Glowing text & UI elements */
         .glow-title {
             text-shadow: 0 0 12px #ff007f, 0 0 24px #00f0ff, 0 0 36px #ffea00;
-        }
-
-        .glow-box {
-            box-shadow: 0 0 18px rgba(0, 240, 255, 0.45), inset 0 0 12px rgba(255, 255, 255, 0.15);
         }
 
         .btn-touch {
@@ -112,20 +108,20 @@
         <div id="touch-ring" class="pointer-events-none absolute w-16 h-16 rounded-full border-4 border-cyan-400 opacity-0 transform -translate-x-1/2 -translate-y-1/2 transition-opacity duration-300"></div>
 
         <!-- Notification Toast Banner -->
-        <div id="toast-banner" class="absolute bottom-5 left-1/2 -translate-x-1/2 pointer-events-none bg-slate-900/90 border-2 border-cyan-400/90 px-6 py-2.5 rounded-2xl shadow-2xl backdrop-blur-md text-center max-w-[90vw]">
+        <div id="toast-banner" class="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none bg-slate-900/90 border-2 border-cyan-400/90 px-6 py-2.5 rounded-2xl shadow-2xl backdrop-blur-md text-center max-w-[90vw]">
             <p id="toast-text" class="text-xs sm:text-base font-extrabold bg-gradient-to-r from-yellow-200 via-cyan-200 to-pink-300 bg-clip-text text-transparent flex items-center justify-center gap-2">
-                ✨ Tap anywhere on screen to launch 10 rockets! Some orbit, some plunge into the Sun! ✨
+                ✨ Tap to launch 10 rockets! Rockets bounce off the Moon & Astronaut! ✨
             </p>
         </div>
     </div>
 
-    <!-- Script Implementation -->
+    <!-- Simulation Script Logic -->
     <script>
         const canvas = document.getElementById('simCanvas');
         const ctx = canvas.getContext('2d');
 
         // SIMULATION CONSTANTS & CONFIGURATION
-        const GRAVITY_CONSTANT = 3200;    // Gravitational Strength (G)
+        const GRAVITY_CONSTANT = 3400;    // Gravitational Strength (G)
         const SOFTENING_FACTOR = 300;     // Prevents infinite acceleration near center
         const MAX_SPACESHIPS = 50;        // Maximum active rockets allowed
         const COOLDOWN_MS = 1000;         // 1x per second spam-click rate limit filter
@@ -136,6 +132,7 @@
         let solarParticles = [];
         let backgroundStars = [];
         let explosionSparks = [];
+        let bounceRings = [];             // Shockwave rings generated on object collisions
         let lastLaunchTime = 0;
         let soundEnabled = true;
 
@@ -148,23 +145,25 @@
             pulsePhase: 0
         };
 
-        // Floating Astronaut State
+        // Physical Floating Astronaut Object
         const astronaut = {
-            x: 120,
-            y: 120,
-            vx: 0.3,
-            vy: 0.18,
+            x: 130,
+            y: 130,
+            vx: 0.35,
+            vy: 0.22,
+            radius: 28,                  // Physical collision radius
             angle: 0,
-            rotSpeed: 0.006,
+            rotSpeed: 0.008,
             scale: 0.95,
             tetherPhase: 0
         };
 
-        // Detailed Background Moon Definition
+        // Physical Moon Object
         const moon = {
             x: 160,
             y: 130,
-            radius: 46
+            radius: 48,                  // Physical collision radius
+            pulse: 0
         };
 
         // Vibrant Neon Color Palette for Rockets & Trails
@@ -211,6 +210,15 @@
                     gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
                     osc.start(now);
                     osc.stop(now + 0.35);
+                } else if (type === 'bounce') {
+                    // Springy elastic bounce sound effect for Moon / Astronaut collisions
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(450 + Math.random() * 200, now);
+                    osc.frequency.exponentialRampToValueAtTime(180, now + 0.18);
+                    gain.gain.setValueAtTime(0.22, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+                    osc.start(now);
+                    osc.stop(now + 0.18);
                 } else if (type === 'crash') {
                     // Sun crash explosion sound effect
                     osc.type = 'triangle';
@@ -262,8 +270,8 @@
             sun.y = canvas.height / 2;
 
             // Position Moon relative to screen top right
-            moon.x = Math.max(100, canvas.width - 150);
-            moon.y = 120;
+            moon.x = Math.max(120, canvas.width - 160);
+            moon.y = 140;
 
             generateBackgroundStars();
         }
@@ -308,19 +316,11 @@
             attemptLaunch(clickX, clickY);
         }
 
-        // Mouse click event
-        canvas.addEventListener('click', (e) => {
+        // Pointerdown handles both Touch and Mouse seamlessly for Chromebooks
+        canvas.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
             handleInteraction(e.clientX, e.clientY);
         });
-
-        // Touch event optimized for Chromebook Touchscreens
-        canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault(); // Prevent scrolling & zooming gestures
-            if (e.touches && e.touches.length > 0) {
-                const touch = e.touches[0];
-                handleInteraction(touch.clientX, touch.clientY);
-            }
-        }, { passive: false });
 
         // LAUNCH 10 ROCKETS WITH VARIED TRAJECTORIES (ORBITAL & GRAVITY WELL FALLERS)
         function attemptLaunch(clickX, clickY) {
@@ -364,24 +364,19 @@
             const nx = dx / r;
             const ny = dy / r;
 
-            // Clockwise Tangential Unit Vector (perpendicular to radial line): (tx, ty)
+            // Tangential Unit Vector (perpendicular to radial line): (tx, ty)
             const tx = -ny;
             const ty = nx;
 
-            // Launch 10 Rockets with VARIED VELOCITIES (Orbits & Plunging Gravity Well Trajectories)
+            // Launch 10 Rockets with VARIED VELOCITIES
             for (let i = 0; i < countToLaunch; i++) {
-                // Determine trajectory profile for each rocket:
-                // - Some rockets launch near ideal circular orbital speed (0.95 - 1.05x speed)
-                // - Some launch with significantly LOWER tangential speed (0.25 - 0.55x speed) or inward angle, causing them to fall into the Sun's gravity well!
-                // - Some launch with slightly higher speed (1.15x) creating elongated elliptical orbits.
-
                 let speedMultiplier;
                 let radialInwardFactor = 0;
 
                 if (i % 3 === 0) {
                     // Gravity Well Plungers (Sub-orbital speed -> falls into Sun!)
                     speedMultiplier = 0.25 + Math.random() * 0.35;
-                    radialInwardFactor = -0.25; // slight inward nudge towards sun
+                    radialInwardFactor = -0.25;
                 } else if (i % 3 === 1) {
                     // Stable Circular/Slightly Elliptical Orbiters
                     speedMultiplier = 0.92 + (i * 0.02) + (Math.random() * 0.08);
@@ -389,7 +384,7 @@
                 } else {
                     // Wide Elliptical Orbiters
                     speedMultiplier = 1.1 + (Math.random() * 0.12);
-                    radialInwardFactor = 0.1; // slight outward thrust
+                    radialInwardFactor = 0.1;
                 }
 
                 const finalVx = (tx * idealOrbitalSpeed * speedMultiplier) + (nx * idealOrbitalSpeed * radialInwardFactor);
@@ -417,7 +412,7 @@
 
             lastLaunchTime = now;
             playSound('launch');
-            showToast(`🚀 Launched ${countToLaunch} rockets! Watch some fall into the Sun's gravity well!`);
+            showToast(`🚀 Launched ${countToLaunch} rockets! Bounce off the Moon & Astronaut!`);
             updateHUD();
         }
 
@@ -435,14 +430,15 @@
             toastText.textContent = message;
             if (toastTimeout) clearTimeout(toastTimeout);
             toastTimeout = setTimeout(() => {
-                toastText.textContent = "✨ Tap anywhere on screen to launch 10 rockets! Some orbit, some plunge into the Sun! ✨";
-            }, 2800);
+                toastText.textContent = "✨ Tap to launch 10 rockets! Rockets bounce off the Moon & Astronaut! ✨";
+            }, 3000);
         }
 
         // RESET SIMULATION
         function resetSimulation() {
             spaceships = [];
             explosionSparks = [];
+            bounceRings = [];
             playSound('reset');
             showToast("🔄 Space cleared! Ready to launch new rockets.");
             updateHUD();
@@ -516,13 +512,37 @@
             }
         }
 
+        // UPDATE BOUNCE IMPACT SHOCKWAVE RINGS
+        function spawnBounceRing(x, y, color) {
+            bounceRings.push({
+                x: x,
+                y: y,
+                radius: 6,
+                maxRadius: 36,
+                color: color || '#00f0ff',
+                alpha: 1.0,
+                decay: 0.04
+            });
+        }
+
+        function updateBounceRings() {
+            for (let i = bounceRings.length - 1; i >= 0; i--) {
+                const r = bounceRings[i];
+                r.radius += 1.8;
+                r.alpha -= r.decay;
+                if (r.alpha <= 0 || r.radius >= r.maxRadius) {
+                    bounceRings.splice(i, 1);
+                }
+            }
+        }
+
         // UPDATE EXPLOSION SPARKS WHEN A ROCKET CRASHES INTO SUN
         function updateExplosionSparks() {
             for (let i = explosionSparks.length - 1; i >= 0; i--) {
                 const sp = explosionSparks[i];
                 sp.x += sp.vx;
                 sp.y += sp.vy;
-                sp.vx *= 0.96; // drag
+                sp.vx *= 0.96;
                 sp.vy *= 0.96;
                 sp.life -= sp.decay;
 
@@ -551,12 +571,19 @@
             }
         }
 
-        // UPDATE ASTRONAUT POSITION
+        // UPDATE ASTRONAUT POSITION & SCREEN BOUNDARY WRAPPING
         function updateAstronaut() {
             astronaut.x += astronaut.vx;
             astronaut.y += astronaut.vy;
             astronaut.angle += astronaut.rotSpeed;
             astronaut.tetherPhase += 0.03;
+
+            // Dampen astronaut recoil speed over time back to default drift speed
+            const speedSq = astronaut.vx * astronaut.vx + astronaut.vy * astronaut.vy;
+            if (speedSq > 0.4) {
+                astronaut.vx *= 0.98;
+                astronaut.vy *= 0.98;
+            }
 
             // Wrap around screen boundaries smoothly
             const margin = 80;
@@ -566,19 +593,68 @@
             if (astronaut.y < -margin) astronaut.y = canvas.height + margin;
         }
 
-        // PHYSICS STEP
+        // ELASTIC COLLISION PHYSICS FUNCTION (BOUNCE REFLECTION)
+        function handleElasticCollision(ship, collider, colliderVx = 0, colliderVy = 0, isAstronaut = false) {
+            const dx = ship.x - collider.x;
+            const dy = ship.y - collider.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const minDist = ship.radius + collider.radius;
+
+            if (dist < minDist) {
+                // 1. Calculate collision normal unit vector
+                const nx = dx / (dist || 1);
+                const ny = dy / (dist || 1);
+
+                // 2. Separate objects to prevent sticking
+                ship.x = collider.x + nx * (minDist + 1);
+                ship.y = collider.y + ny * (minDist + 1);
+
+                // 3. Calculate relative velocity
+                const relVx = ship.vx - colliderVx;
+                const relVy = ship.vy - colliderVy;
+
+                // 4. Dot product of relative velocity and normal vector
+                const velAlongNormal = relVx * nx + relVy * ny;
+
+                // Only bounce if moving towards the collider
+                if (velAlongNormal < 0) {
+                    const restitution = 0.96; // High elasticity for fun bounces
+
+                    // Reflected velocity component
+                    const impulse = -(1 + restitution) * velAlongNormal;
+
+                    ship.vx += impulse * nx;
+                    ship.vy += impulse * ny;
+
+                    // If astronaut, give astronaut a fun tiny recoil impulse
+                    if (isAstronaut) {
+                        astronaut.vx -= impulse * nx * 0.12;
+                        astronaut.vy -= impulse * ny * 0.12;
+                        astronaut.rotSpeed += (Math.random() - 0.5) * 0.02; // Spin on impact!
+                    }
+
+                    // Trigger sound & visual impact ring at collision contact point
+                    const impactX = collider.x + nx * collider.radius;
+                    const impactY = collider.y + ny * collider.radius;
+                    spawnBounceRing(impactX, impactY, ship.color);
+                    playSound('bounce');
+                }
+            }
+        }
+
+        // MAIN PHYSICS STEP
         function updatePhysics() {
             for (let i = spaceships.length - 1; i >= 0; i--) {
                 const s = spaceships[i];
 
-                // Vector from Rocket to Central Sun
-                const dx = sun.x - s.x;
-                const dy = sun.y - s.y;
-                const distSq = dx * dx + dy * dy;
-                const dist = Math.sqrt(distSq);
+                // --- 1. Vector to Central Sun Gravity Well ---
+                const dxSun = sun.x - s.x;
+                const dySun = sun.y - s.y;
+                const distSqSun = dxSun * dxSun + dySun * dySun;
+                const distSun = Math.sqrt(distSqSun);
 
                 // Check Sun Collision (Gravity Well Crash!)
-                if (dist < sun.radius + s.radius - 2) {
+                if (distSun < sun.radius + s.radius - 2) {
                     triggerSunCrashExplosion(s.x, s.y, s.color);
                     spaceships.splice(i, 1);
                     updateHUD();
@@ -594,12 +670,16 @@
                     continue;
                 }
 
-                // Inverse Square Law Gravitational Acceleration
-                const acceleration = GRAVITY_CONSTANT / (distSq + SOFTENING_FACTOR);
+                // --- 2. Check Physical Elastic Collisions with Moon & Astronaut ---
+                handleElasticCollision(s, moon, 0, 0, false);
+                handleElasticCollision(s, astronaut, astronaut.vx, astronaut.vy, true);
+
+                // --- 3. Inverse Square Law Gravitational Acceleration from Sun ---
+                const acceleration = GRAVITY_CONSTANT / (distSqSun + SOFTENING_FACTOR);
 
                 // Directional Acceleration Components towards Sun
-                const ax = acceleration * (dx / dist);
-                const ay = acceleration * (dy / dist);
+                const ax = acceleration * (dxSun / distSun);
+                const ay = acceleration * (dySun / distSun);
 
                 // Update velocity & position
                 s.vx += ax;
@@ -618,6 +698,7 @@
             sun.pulsePhase += 0.04;
             updateSolarParticles();
             updateExplosionSparks();
+            updateBounceRings();
             updateAstronaut();
             updateCooldownBar();
         }
@@ -654,7 +735,7 @@
             }
         }
 
-        // 2. DRAW MOON WITH CRATERS
+        // 2. DRAW MOON WITH PHYSICAL CRATER DETAILS
         function drawMoon() {
             ctx.save();
 
@@ -666,6 +747,15 @@
             ctx.beginPath();
             ctx.arc(moon.x, moon.y, moon.radius * 1.9, 0, Math.PI * 2);
             ctx.fill();
+
+            // Moon Outer Collider Ring Indicator
+            ctx.strokeStyle = 'rgba(0, 240, 255, 0.35)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.arc(moon.x, moon.y, moon.radius + 3, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
 
             // Moon Body Gradient
             const moonGrad = ctx.createRadialGradient(moon.x - 14, moon.y - 14, 5, moon.x, moon.y, moon.radius);
@@ -701,10 +791,20 @@
             ctx.restore();
         }
 
-        // 3. DRAW FLOATING CARTOON ASTRONAUT
+        // 3. DRAW FLOATING PHYSICAL CARTOON ASTRONAUT
         function drawAstronaut() {
             ctx.save();
             ctx.translate(astronaut.x, astronaut.y);
+
+            // Subtle Collider Target Ring
+            ctx.strokeStyle = 'rgba(255, 0, 128, 0.4)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.arc(0, 0, astronaut.radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
             ctx.rotate(astronaut.angle);
             ctx.scale(astronaut.scale, astronaut.scale);
 
@@ -834,7 +934,7 @@
             ctx.arc(0, 0, sun.radius, 0, Math.PI * 2);
             ctx.fill();
 
-            // Friendly Sun Face (1st-Grade Kid Friendly)
+            // Friendly Sun Face
             // Eyes
             ctx.fillStyle = '#3e2723';
             ctx.beginPath();
@@ -885,6 +985,18 @@
                 ctx.beginPath();
                 ctx.arc(sp.x, sp.y, sp.radius, 0, Math.PI * 2);
                 ctx.fill();
+                ctx.restore();
+            }
+
+            // Render Collision Bounce Shockwave Rings
+            for (const r of bounceRings) {
+                ctx.save();
+                ctx.globalAlpha = r.alpha;
+                ctx.strokeStyle = r.color;
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+                ctx.stroke();
                 ctx.restore();
             }
         }
